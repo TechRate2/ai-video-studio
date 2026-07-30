@@ -1,0 +1,750 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cinejelly.local/schemas/business-completion-audit-report.schema.json",
+  "title": "CineJelly Business Completion Audit Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "status",
+    "noSpend",
+    "networkCallsMade",
+    "providerCallsMade",
+    "checkedInputs",
+    "sourceReports",
+    "readinessSnapshot",
+    "commercialOfferScopeSummary",
+    "operatorHandoffSummary",
+    "snapshotParityCoverageSummary",
+    "codeWorkSummary",
+    "productCodeGaps",
+    "blockerSummary",
+    "evidenceClosurePlan",
+    "blockers",
+    "releaseGateSummary",
+    "nextActions"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "cinejelly.business-completion-audit.v1" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "status": {
+      "enum": [
+        "ready_for_customer_traffic",
+        "ready_for_live_evidence_sequence",
+        "blocked_by_external_inputs",
+        "blocked_by_code_or_contracts",
+        "missing_prerequisite_reports"
+      ]
+    },
+    "noSpend": { "const": true },
+    "networkCallsMade": { "const": false },
+    "providerCallsMade": { "const": false },
+    "checkedInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "businessReadinessPath",
+        "businessPlanPath",
+        "liveInputsPath",
+        "commercialInputsPath",
+        "launchIntakePath",
+        "releaseAuditPath",
+        "snapshotParityPath",
+        "reportContractsPath",
+        "commercialLaunchDoctorPath",
+        "commercialLaunchDoctorSkipped",
+        "opsConfigPath"
+      ],
+      "properties": {
+        "businessReadinessPath": { "type": "string" },
+        "businessPlanPath": { "type": "string" },
+        "liveInputsPath": { "type": "string" },
+        "commercialInputsPath": { "type": "string" },
+        "launchIntakePath": { "type": "string" },
+        "releaseAuditPath": { "type": "string" },
+        "snapshotParityPath": { "type": "string" },
+        "reportContractsPath": { "type": "string" },
+        "commercialLaunchDoctorPath": { "type": "string" },
+        "commercialLaunchDoctorSkipped": { "type": "boolean" },
+        "opsConfigPath": { "type": "string" },
+        "markdownOutputPath": { "type": "string" }
+      }
+    },
+    "sourceReports": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["present", "path", "status"],
+        "properties": {
+          "present": { "type": "boolean" },
+          "path": { "type": "string" },
+          "schemaVersion": { "type": "string" },
+          "status": { "type": "string" }
+        }
+      }
+    },
+    "readinessSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceCompletionPercent",
+        "businessReadinessStatus",
+        "releaseAuditStatus",
+        "snapshotParityStatus",
+        "reportContractsStatus",
+        "commercialInputsStatus",
+        "launchDoctorStatus",
+        "opsConfigStatus",
+        "launchDoctorKnownCodeBlockingIssueCount",
+        "commandPlanAuditStatus",
+        "atlas",
+        "budget",
+        "readyPaidGates",
+        "readyPaidGateCount",
+        "shouldDeferFullSequenceSpend",
+        "canRunGeneratedAudioPaidSlice",
+        "canRunFullKnownPaidSequence",
+        "canReleaseToCustomerTraffic"
+      ],
+      "properties": {
+        "evidenceCompletionPercent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "businessReadinessStatus": { "type": "string" },
+        "releaseAuditStatus": { "type": "string" },
+        "snapshotParityStatus": { "type": "string" },
+        "reportContractsStatus": { "type": "string" },
+        "commercialInputsStatus": { "type": "string" },
+        "launchDoctorStatus": { "type": "string" },
+        "opsConfigStatus": { "type": "string" },
+        "launchDoctorKnownCodeBlockingIssueCount": { "type": "integer", "minimum": 0 },
+        "commandPlanAuditStatus": { "type": "string" },
+        "atlas": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mediaApiKeyConfigured",
+            "llmApiKeyConfigured",
+            "llmFallbackAvailable",
+            "mediaReady",
+            "llmReady",
+            "seedanceVideoReady",
+            "generatedAudioReady",
+            "generatedAudioPaidSliceReady",
+            "fullPaidSequenceWithinBudget"
+          ],
+          "properties": {
+            "mediaApiKeyConfigured": { "type": "boolean" },
+            "llmApiKeyConfigured": { "type": "boolean" },
+            "llmFallbackAvailable": { "type": "boolean" },
+            "mediaReady": { "type": "boolean" },
+            "llmReady": { "type": "boolean" },
+            "seedanceVideoReady": { "type": "boolean" },
+            "generatedAudioReady": { "type": "boolean" },
+            "generatedAudioPaidSliceReady": { "type": "boolean" },
+            "fullPaidSequenceWithinBudget": { "type": "boolean" }
+          }
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["budgetFit", "unknownCostItems"],
+          "properties": {
+            "approvedBudgetUsd": { "type": "number", "minimum": 0 },
+            "knownPaidEstimateUsd": { "type": "number", "minimum": 0 },
+            "budgetFit": { "type": "string" },
+            "longFormMinimumBudgetUsd": { "type": "number", "minimum": 0 },
+            "generatedAudioEstimatedCostUsd": { "type": "number", "minimum": 0 },
+            "unknownCostItems": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "readyPaidGates": { "type": "array", "items": { "type": "string" } },
+        "readyPaidGateCount": { "type": "integer", "minimum": 0 },
+        "shouldDeferFullSequenceSpend": { "type": "boolean" },
+        "canRunGeneratedAudioPaidSlice": { "type": "boolean" },
+        "canRunFullKnownPaidSequence": { "type": "boolean" },
+        "canReleaseToCustomerTraffic": { "type": "boolean" }
+      }
+    },
+    "commercialOfferScopeSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "launchIntakePresent",
+        "launchIntakeStatus",
+        "configured",
+        "status",
+        "uiRequiredBeforeCustomerTraffic",
+        "scopeDecisionRequired",
+        "blocksApiCliCommercialLaunch",
+        "blocksFullSnapshotParity",
+        "sourceReport",
+        "message"
+      ],
+      "properties": {
+        "launchIntakePresent": { "type": "boolean" },
+        "launchIntakeStatus": { "type": "string" },
+        "configured": { "type": "boolean" },
+        "status": {
+          "enum": [
+            "missing_launch_intake_report",
+            "scope_decision_pending",
+            "api_cli_only_scoped",
+            "first_party_web_ui_required"
+          ]
+        },
+        "productSurface": { "enum": ["api_cli_only", "first_party_web_ui_required"] },
+        "uiRequiredBeforeCustomerTraffic": { "type": "boolean" },
+        "scopeDecisionRequired": { "type": "boolean" },
+        "blocksApiCliCommercialLaunch": { "type": "boolean" },
+        "blocksFullSnapshotParity": { "type": "boolean" },
+        "sourceReport": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    },
+    "operatorHandoffSummary": { "$ref": "#/$defs/operatorHandoffSummary" },
+    "snapshotParityCoverageSummary": { "$ref": "#/$defs/snapshotParityCoverageSummary" },
+    "codeWorkSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reportContractsPass",
+        "releaseAuditReady",
+        "snapshotParityPass",
+        "commercialInputsGenerated",
+        "commercialCommandPlanPass",
+        "atlasKeyAndModelConfigPresent",
+        "knownCodeBlockingIssueCount",
+        "knownProductCodeGapCount",
+        "automatableProductCodeGapCount",
+        "externalEvidenceProductCodeGapCount",
+        "scopeDecisionProductCodeGapCount",
+        "blocksFullSnapshotParity",
+        "blocksApiCliCommercialLaunch",
+        "message"
+      ],
+      "properties": {
+        "reportContractsPass": { "type": "boolean" },
+        "releaseAuditReady": { "type": "boolean" },
+        "snapshotParityPass": { "type": "boolean" },
+        "commercialInputsGenerated": { "type": "boolean" },
+        "commercialCommandPlanPass": { "type": "boolean" },
+        "atlasKeyAndModelConfigPresent": { "type": "boolean" },
+        "knownCodeBlockingIssueCount": { "type": "integer", "minimum": 0 },
+        "knownProductCodeGapCount": { "type": "integer", "minimum": 0 },
+        "automatableProductCodeGapCount": { "type": "integer", "minimum": 0 },
+        "externalEvidenceProductCodeGapCount": { "type": "integer", "minimum": 0 },
+        "scopeDecisionProductCodeGapCount": { "type": "integer", "minimum": 0 },
+        "blocksFullSnapshotParity": { "type": "boolean" },
+        "blocksApiCliCommercialLaunch": { "type": "boolean" },
+        "message": { "type": "string" }
+      }
+    },
+    "productCodeGaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "category",
+          "status",
+          "currentCoveragePercent",
+          "sourceEvidence",
+          "sourcePatternOrigins",
+          "requiredAction",
+          "canAutomateNow",
+          "localPreparationAvailable",
+          "completionRequiresExternalEvidence",
+          "remainingEvidenceGateCount",
+          "scopeDecisionRequired",
+          "scopeDecisionOptions",
+          "blocksApiCliCommercialLaunch",
+          "blocksFullSnapshotParity",
+          "releaseImpact"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "category": { "type": "string" },
+          "status": { "type": "string" },
+          "currentCoveragePercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "sourceEvidence": { "type": "string" },
+          "sourcePatternOrigins": { "type": "array", "items": { "type": "string" } },
+          "requiredAction": { "type": "string" },
+          "canAutomateNow": { "type": "boolean" },
+          "localPreparationAvailable": { "type": "boolean" },
+          "completionRequiresExternalEvidence": { "type": "boolean" },
+          "remainingEvidenceGateCount": { "type": "integer", "minimum": 0 },
+          "scopeDecisionRequired": { "type": "boolean" },
+          "scopeDecisionOptions": { "type": "array", "items": { "type": "string" } },
+          "blocksApiCliCommercialLaunch": { "type": "boolean" },
+          "blocksFullSnapshotParity": { "type": "boolean" },
+          "releaseImpact": { "type": "string" }
+        }
+      }
+    },
+    "blockerSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "automatableNow", "externalOrPaid", "byOwner", "byCategory"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "automatableNow": { "type": "integer", "minimum": 0 },
+        "externalOrPaid": { "type": "integer", "minimum": 0 },
+        "byOwner": { "$ref": "#/$defs/counts" },
+        "byCategory": { "$ref": "#/$defs/counts" }
+      }
+    },
+    "evidenceClosurePlan": { "$ref": "#/$defs/evidenceClosurePlan" },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "owner",
+          "category",
+          "status",
+          "sourceReport",
+          "requiredAction",
+          "canAutomateNow",
+          "paidImpact"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "owner": {
+            "enum": [
+              "codebase",
+              "operator",
+              "budget_owner",
+              "manual_reviewer",
+              "operator_external_provider"
+            ]
+          },
+          "category": { "type": "string" },
+          "status": { "type": "string" },
+          "sourceReport": { "type": "string" },
+          "sourceCheck": { "type": "string" },
+          "requiredAction": { "type": "string" },
+          "validationCommand": { "type": "string" },
+          "canAutomateNow": { "type": "boolean" },
+          "paidImpact": {
+            "enum": [
+              "none",
+              "blocks_paid_validation_budget",
+              "blocks_paid_validation_or_manual_review"
+            ]
+          }
+        }
+      }
+    },
+    "releaseGateSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canReleaseToCustomerTraffic",
+        "canRunNoSpendPrep",
+        "canRunLiveNetworkEvidence",
+        "canRunGeneratedAudioPaidSlice",
+        "canRunFullKnownPaidSequence",
+        "canClaimFullSnapshotParity",
+        "productCodeGapCount",
+        "readyPaidGates",
+        "readyPaidGateCount",
+        "shouldDeferFullSequenceSpend",
+        "safeToRunFullPaidAtlasSequenceNow",
+        "releaseBlocker"
+      ],
+      "properties": {
+        "canReleaseToCustomerTraffic": { "type": "boolean" },
+        "canRunNoSpendPrep": { "type": "boolean" },
+        "canRunLiveNetworkEvidence": { "type": "boolean" },
+        "canRunGeneratedAudioPaidSlice": { "type": "boolean" },
+        "canRunFullKnownPaidSequence": { "type": "boolean" },
+        "canClaimFullSnapshotParity": { "type": "boolean" },
+        "productCodeGapCount": { "type": "integer", "minimum": 0 },
+        "readyPaidGates": { "type": "array", "items": { "type": "string" } },
+        "readyPaidGateCount": { "type": "integer", "minimum": 0 },
+        "shouldDeferFullSequenceSpend": { "type": "boolean" },
+        "safeToRunFullPaidAtlasSequenceNow": { "type": "boolean" },
+        "releaseBlocker": { "type": "string" }
+      }
+    },
+    "nextActions": { "type": "array", "items": { "type": "string" } },
+    "error": { "type": "string" }
+  },
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "operatorHandoffSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "status",
+        "safeToShareWithOperators",
+        "releaseEvidence",
+        "secretValuesIncluded",
+        "rawProviderPayloadsIncluded",
+        "localAbsolutePathsIncluded",
+        "customerMediaIncluded",
+        "requiredInputCount",
+        "configuredInputCount",
+        "missingOrBlockedInputCount",
+        "pendingAfterPaidRunCount",
+        "operatorInputFileCount",
+        "draftFileCount",
+        "reportArchiveFileCount",
+        "commandCount",
+        "readyCommandCount",
+        "blockedCommandCount",
+        "paidCommandCount",
+        "readyPaidCommandCount",
+        "commandPlanAuditStatus",
+        "blockedInputIds",
+        "operatorInputFiles",
+        "refreshCommands"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "commercial_launch_inputs",
+            "missing_commercial_launch_inputs_manifest"
+          ]
+        },
+        "status": { "type": "string" },
+        "safeToShareWithOperators": { "type": "boolean" },
+        "releaseEvidence": { "type": "boolean" },
+        "secretValuesIncluded": { "type": "boolean" },
+        "rawProviderPayloadsIncluded": { "type": "boolean" },
+        "localAbsolutePathsIncluded": { "type": "boolean" },
+        "customerMediaIncluded": { "type": "boolean" },
+        "requiredInputCount": { "type": "integer", "minimum": 0 },
+        "configuredInputCount": { "type": "integer", "minimum": 0 },
+        "missingOrBlockedInputCount": { "type": "integer", "minimum": 0 },
+        "pendingAfterPaidRunCount": { "type": "integer", "minimum": 0 },
+        "operatorInputFileCount": { "type": "integer", "minimum": 0 },
+        "draftFileCount": { "type": "integer", "minimum": 0 },
+        "reportArchiveFileCount": { "type": "integer", "minimum": 0 },
+        "commandCount": { "type": "integer", "minimum": 0 },
+        "readyCommandCount": { "type": "integer", "minimum": 0 },
+        "blockedCommandCount": { "type": "integer", "minimum": 0 },
+        "paidCommandCount": { "type": "integer", "minimum": 0 },
+        "readyPaidCommandCount": { "type": "integer", "minimum": 0 },
+        "commandPlanAuditStatus": { "type": "string" },
+        "blockedInputIds": { "type": "array", "items": { "type": "string" } },
+        "operatorInputFiles": { "type": "array", "items": { "type": "string" } },
+        "refreshCommands": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "snapshotParityCoverageSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "status",
+        "guardrailsPass",
+        "canClaimFullSnapshotParity",
+        "releaseEvidence",
+        "sourceEstimateCount",
+        "estimatedSourceCount",
+        "lowestEstimatePercent",
+        "highestEstimatePercent",
+        "averageEstimateMinPercent",
+        "averageEstimateMaxPercent",
+        "sourceEstimates"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "snapshot_parity_audit",
+            "missing_snapshot_parity_estimates"
+          ]
+        },
+        "status": { "type": "string" },
+        "guardrailsPass": { "type": "boolean" },
+        "canClaimFullSnapshotParity": { "type": "boolean" },
+        "releaseEvidence": { "const": false },
+        "sourceEstimateCount": { "type": "integer", "minimum": 0 },
+        "estimatedSourceCount": { "type": "integer", "minimum": 0 },
+        "lowestEstimatePercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "highestEstimatePercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "averageEstimateMinPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "averageEstimateMaxPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "sourceEstimates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "localPath",
+              "upstreamRepository",
+              "estimateMinPercent",
+              "estimateMaxPercent",
+              "estimateText",
+              "mainGaps"
+            ],
+            "properties": {
+              "id": { "type": "string" },
+              "localPath": { "type": "string" },
+              "upstreamRepository": { "type": "string" },
+              "estimateMinPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "estimateMaxPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "estimateText": { "type": "string" },
+              "mainGaps": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "evidenceClosurePlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "releaseEvidence",
+        "blockerCount",
+        "codeActionCount",
+        "externalOrPaidActionCount",
+        "paidDependencyCount",
+        "phaseCount",
+        "phases"
+      ],
+      "properties": {
+        "status": { "enum": ["clear", "blocked"] },
+        "releaseEvidence": { "const": false },
+        "blockerCount": { "type": "integer", "minimum": 0 },
+        "codeActionCount": { "type": "integer", "minimum": 0 },
+        "externalOrPaidActionCount": { "type": "integer", "minimum": 0 },
+        "paidDependencyCount": { "type": "integer", "minimum": 0 },
+        "phaseCount": { "type": "integer", "minimum": 0 },
+        "phases": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceClosurePhase" }
+        }
+      }
+    },
+    "evidenceClosurePhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "order",
+        "label",
+        "owner",
+        "status",
+        "blockerCount",
+        "blockerIds",
+        "productGapCount",
+        "productGapIds",
+        "requiredInputCount",
+        "requiredInputIds",
+        "envVarCount",
+        "envVars",
+        "envPlaceholders",
+        "operatorInputFiles",
+        "draftFiles",
+        "reportArchiveFiles",
+        "commands",
+        "commandGuards",
+        "localPreparationCommands",
+        "executionReadiness",
+        "releaseImpact"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "code_contract_fix",
+            "scope_decision",
+            "operator_attestation_prep",
+            "deployment_evidence",
+            "live_provider_evidence",
+            "source_video_input",
+            "remote_stock_live_terms",
+            "budget_approval",
+            "post_paid_manual_review"
+          ]
+        },
+        "order": { "type": "integer", "minimum": 1 },
+        "label": { "type": "string" },
+        "owner": { "type": "string" },
+        "status": {
+          "enum": [
+            "blocked",
+            "blocked_by_budget",
+            "pending_after_paid_run",
+            "requires_external_evidence",
+            "not_required"
+          ]
+        },
+        "blockerCount": { "type": "integer", "minimum": 0 },
+        "blockerIds": { "type": "array", "items": { "type": "string" } },
+        "productGapCount": { "type": "integer", "minimum": 0 },
+        "productGapIds": { "type": "array", "items": { "type": "string" } },
+        "requiredInputCount": { "type": "integer", "minimum": 0 },
+        "requiredInputIds": { "type": "array", "items": { "type": "string" } },
+        "envVarCount": { "type": "integer", "minimum": 0 },
+        "envVars": { "type": "array", "items": { "type": "string" } },
+        "envPlaceholders": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceClosureEnvPlaceholder" }
+        },
+        "operatorInputFiles": { "type": "array", "items": { "type": "string" } },
+        "draftFiles": { "type": "array", "items": { "type": "string" } },
+        "reportArchiveFiles": { "type": "array", "items": { "type": "string" } },
+        "commands": { "type": "array", "items": { "type": "string" } },
+        "commandGuards": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceClosureCommandGuard" }
+        },
+        "localPreparationCommands": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceClosureLocalPreparationCommand" }
+        },
+        "executionReadiness": { "$ref": "#/$defs/evidenceClosureExecutionReadiness" },
+        "releaseImpact": { "type": "string" }
+      }
+    },
+    "evidenceClosureExecutionReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "canAttemptNow",
+        "blockingReasonCount",
+        "blockingReasons",
+        "inputStatusCounts",
+        "missingRequiredEnvVars",
+        "optionalUnconfiguredEnvVars",
+        "missingOperatorInputFiles",
+        "missingReportArchiveFiles",
+        "guardSummary"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "ready_to_attempt",
+            "needs_operator_input",
+            "blocked_by_budget",
+            "pending_after_paid_run",
+            "needs_resolved_placeholders",
+            "requires_confirmation",
+            "blocked"
+          ]
+        },
+        "canAttemptNow": { "type": "boolean" },
+        "blockingReasonCount": { "type": "integer", "minimum": 0 },
+        "blockingReasons": { "type": "array", "items": { "type": "string" } },
+        "inputStatusCounts": { "$ref": "#/$defs/counts" },
+        "missingRequiredEnvVars": { "type": "array", "items": { "type": "string" } },
+        "optionalUnconfiguredEnvVars": { "type": "array", "items": { "type": "string" } },
+        "missingOperatorInputFiles": { "type": "array", "items": { "type": "string" } },
+        "missingReportArchiveFiles": { "type": "array", "items": { "type": "string" } },
+        "guardSummary": { "$ref": "#/$defs/evidenceClosureGuardSummary" }
+      }
+    },
+    "evidenceClosureGuardSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commandCount",
+        "runnableCommandCount",
+        "liveNetworkCommandCount",
+        "providerSpendCommandCount",
+        "operatorConfirmationCommandCount",
+        "manualReviewCommandCount",
+        "placeholderCommandCount"
+      ],
+      "properties": {
+        "commandCount": { "type": "integer", "minimum": 0 },
+        "runnableCommandCount": { "type": "integer", "minimum": 0 },
+        "liveNetworkCommandCount": { "type": "integer", "minimum": 0 },
+        "providerSpendCommandCount": { "type": "integer", "minimum": 0 },
+        "operatorConfirmationCommandCount": { "type": "integer", "minimum": 0 },
+        "manualReviewCommandCount": { "type": "integer", "minimum": 0 },
+        "placeholderCommandCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "evidenceClosureEnvPlaceholder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sensitivity", "required", "configured", "purpose"],
+      "properties": {
+        "name": { "type": "string" },
+        "sensitivity": { "type": "string" },
+        "required": { "type": "boolean" },
+        "configured": { "type": "boolean" },
+        "purpose": { "type": "string" }
+      }
+    },
+    "evidenceClosureCommandGuard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command",
+        "source",
+        "runnable",
+        "requiresLiveNetwork",
+        "requiresProviderSpend",
+        "requiresOperatorConfirmation",
+        "requiresManualReview",
+        "containsPlaceholder"
+      ],
+      "properties": {
+        "command": { "type": "string" },
+        "source": { "enum": ["operator_handoff_manifest", "derived_from_command_text"] },
+        "runnable": { "type": "boolean" },
+        "requiresLiveNetwork": { "type": "boolean" },
+        "requiresProviderSpend": { "type": "boolean" },
+        "requiresOperatorConfirmation": { "type": "boolean" },
+        "requiresManualReview": { "type": "boolean" },
+        "containsPlaceholder": { "type": "boolean" }
+      }
+    },
+    "evidenceClosureLocalPreparationCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "command",
+        "source",
+        "sourceInputIds",
+        "runnable",
+        "producesDrafts",
+        "releaseEvidence",
+        "draftFiles",
+        "requiresLiveNetwork",
+        "requiresProviderSpend",
+        "requiresOperatorConfirmation",
+        "requiresManualReview",
+        "containsPlaceholder"
+      ],
+      "properties": {
+        "name": { "type": "string" },
+        "command": { "type": "string" },
+        "source": { "enum": ["operator_handoff_manifest", "phase_input_mapping"] },
+        "sourceInputIds": { "type": "array", "items": { "type": "string" } },
+        "runnable": { "type": "boolean" },
+        "producesDrafts": { "type": "boolean" },
+        "releaseEvidence": { "const": false },
+        "draftFiles": { "type": "array", "items": { "type": "string" } },
+        "requiresLiveNetwork": { "type": "boolean" },
+        "requiresProviderSpend": { "type": "boolean" },
+        "requiresOperatorConfirmation": { "type": "boolean" },
+        "requiresManualReview": { "type": "boolean" },
+        "containsPlaceholder": { "type": "boolean" }
+      }
+    }
+  }
+}

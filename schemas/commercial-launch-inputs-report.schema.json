@@ -1,0 +1,648 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cinejelly.local/schemas/commercial-launch-inputs-report.schema.json",
+  "title": "CineJelly Commercial Launch Inputs Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "status",
+    "noSpend",
+    "networkCallsMade",
+    "providerCallsMade",
+    "checkedInputs",
+    "sourceReports",
+    "inputSummary",
+    "requiredInputs",
+    "envPlaceholders",
+    "atlasConfigurationSummary",
+    "evidenceCommandPlan",
+    "budgetConstrainedPaidPlan",
+    "commandPlanAudit",
+    "operatorHandoffManifest",
+    "releaseGateSummary",
+    "nextActions"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "cinejelly.commercial-launch-inputs.v1" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "status": { "enum": ["blocked_by_operator_inputs", "ready_for_live_evidence_sequence"] },
+    "noSpend": { "const": true },
+    "networkCallsMade": { "const": false },
+    "providerCallsMade": { "const": false },
+    "checkedInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backendReadinessPath",
+        "businessReadinessPath",
+        "businessPlanPath",
+        "liveInputsPath",
+        "launchIntakePath",
+        "atlasBillingPath",
+        "opsConfigPath",
+        "providerLiveActionsPath",
+        "providerGraphResumePath",
+        "shortReviewOperationPath",
+        "shortProductRightsPath"
+      ],
+      "properties": {
+        "backendReadinessPath": { "type": "string" },
+        "businessReadinessPath": { "type": "string" },
+        "businessPlanPath": { "type": "string" },
+        "liveInputsPath": { "type": "string" },
+        "launchIntakePath": { "type": "string" },
+        "atlasBillingPath": { "type": "string" },
+        "opsConfigPath": { "type": "string" },
+        "providerLiveActionsPath": { "type": "string" },
+        "providerGraphResumePath": { "type": "string" },
+        "shortReviewOperationPath": { "type": "string" },
+        "shortProductRightsPath": { "type": "string" },
+        "markdownOutputPath": { "type": "string" }
+      }
+    },
+    "sourceReports": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["present", "path", "status"],
+        "properties": {
+          "present": { "type": "boolean" },
+          "path": { "type": "string" },
+          "schemaVersion": { "type": "string" },
+          "status": { "type": "string" }
+        }
+      }
+    },
+    "inputSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "configured", "missing", "blockedByBudget", "pendingAfterPaidRun"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "configured": { "type": "integer", "minimum": 0 },
+        "missing": { "type": "integer", "minimum": 0 },
+        "blockedByBudget": { "type": "integer", "minimum": 0 },
+        "pendingAfterPaidRun": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "requiredInputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "category",
+          "status",
+          "sensitivity",
+          "requiredFor",
+          "envVars",
+          "filePaths",
+          "acceptance",
+          "validationCommand"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "category": {
+            "enum": ["deployment", "operations", "budget", "source_video", "remote_stock", "manual_review", "product_scope"]
+          },
+          "status": { "enum": ["missing", "configured", "blocked_by_budget", "pending_after_paid_run"] },
+          "sensitivity": {
+            "enum": [
+              "public_url",
+              "secret_env",
+              "non_secret_operator_attestation",
+              "budget_approval",
+              "boolean_env",
+              "manual_review",
+              "operator_decision"
+            ]
+          },
+          "requiredFor": { "type": "array", "items": { "type": "string" } },
+          "envVars": { "type": "array", "items": { "type": "string" } },
+          "filePaths": { "type": "array", "items": { "type": "string" } },
+          "acceptance": { "type": "string" },
+          "validationCommand": { "type": "string" },
+          "blockerMessage": { "type": "string" },
+          "currentValue": { "type": "string" },
+          "requiredValue": { "type": "string" }
+        }
+      }
+    },
+    "envPlaceholders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "sensitivity", "exampleValue", "purpose", "required", "configured"],
+        "properties": {
+          "name": { "type": "string" },
+          "sensitivity": { "enum": ["public_url", "secret", "boolean"] },
+          "exampleValue": { "type": "string" },
+          "purpose": { "type": "string" },
+          "required": { "type": "boolean" },
+          "configured": { "type": "boolean" }
+        }
+      }
+    },
+    "atlasConfigurationSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "docsAlignment", "keys", "endpoints", "models", "readiness", "operatorMessage"],
+      "properties": {
+        "source": { "enum": ["live_readiness_inputs", "missing_live_inputs_report"] },
+        "docsAlignment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["apiKeyModel", "llmBaseUrl", "mediaBaseUrl", "billingBaseUrl"],
+          "properties": {
+            "apiKeyModel": { "type": "string" },
+            "llmBaseUrl": { "const": "https://api.atlascloud.ai/v1" },
+            "mediaBaseUrl": { "const": "https://api.atlascloud.ai/api/v1" },
+            "billingBaseUrl": { "const": "https://api.atlascloud.ai/public/v1" }
+          }
+        },
+        "keys": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mediaApiKeyConfigured",
+            "llmApiKeyConfigured",
+            "llmFallbackAvailable",
+            "billingReportPresent",
+            "billingReportNetworkCaptured",
+            "generatedAudioBillingReportPresent",
+            "generatedAudioBillingApproved"
+          ],
+          "properties": {
+            "mediaApiKeyConfigured": { "type": "boolean" },
+            "llmApiKeyConfigured": { "type": "boolean" },
+            "llmFallbackAvailable": { "type": "boolean" },
+            "billingReportPresent": { "type": "boolean" },
+            "billingReportNetworkCaptured": { "type": "boolean" },
+            "generatedAudioBillingReportPresent": { "type": "boolean" },
+            "generatedAudioBillingApproved": { "type": "boolean" }
+          }
+        },
+        "endpoints": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["llmBaseUrlConfigured", "mediaBaseUrlConfigured"],
+          "properties": {
+            "llmBaseUrlConfigured": { "type": "boolean" },
+            "mediaBaseUrlConfigured": { "type": "boolean" }
+          }
+        },
+        "models": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "llmModelConfigured",
+            "seedanceStandardModelConfigured",
+            "seedanceFastModelConfigured",
+            "seedanceCapabilitiesJsonValid",
+            "seedanceCapabilityCount",
+            "generatedAudioModelConfigured",
+            "generatedAudioVoiceConfigured",
+            "generatedAudioCapabilitiesJsonValid",
+            "generatedAudioCapabilityCount"
+          ],
+          "properties": {
+            "llmModelConfigured": { "type": "boolean" },
+            "seedanceStandardModelConfigured": { "type": "boolean" },
+            "seedanceFastModelConfigured": { "type": "boolean" },
+            "seedanceCapabilitiesJsonValid": { "type": "boolean" },
+            "seedanceCapabilityCount": { "type": "integer", "minimum": 0 },
+            "generatedAudioModelConfigured": { "type": "boolean" },
+            "generatedAudioVoiceConfigured": { "type": "boolean" },
+            "generatedAudioCapabilitiesJsonValid": { "type": "boolean" },
+            "generatedAudioCapabilityCount": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "readiness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mediaReady",
+            "llmReady",
+            "seedanceVideoReady",
+            "generatedAudioReady",
+            "generatedAudioPaidSliceReady",
+            "fullPaidSequenceWithinBudget"
+          ],
+          "properties": {
+            "mediaReady": { "type": "boolean" },
+            "llmReady": { "type": "boolean" },
+            "seedanceVideoReady": { "type": "boolean" },
+            "generatedAudioReady": { "type": "boolean" },
+            "generatedAudioPaidSliceReady": { "type": "boolean" },
+            "fullPaidSequenceWithinBudget": { "type": "boolean" }
+          }
+        },
+        "operatorMessage": { "type": "string" }
+      }
+    },
+    "evidenceCommandPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["noSpendLocal", "noSpendNetwork", "liveNetwork", "paidAtlas", "finalAudit"],
+      "properties": {
+        "noSpendLocal": { "$ref": "#/$defs/commandList" },
+        "noSpendNetwork": { "$ref": "#/$defs/commandList" },
+        "liveNetwork": { "$ref": "#/$defs/commandList" },
+        "paidAtlas": { "$ref": "#/$defs/commandList" },
+        "finalAudit": { "$ref": "#/$defs/commandList" }
+      }
+    },
+    "budgetConstrainedPaidPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present",
+        "fullKnownPaidSequenceWithinBudget",
+        "withinBudgetCount",
+        "blockedOrUnknownCount",
+        "slices"
+      ],
+      "properties": {
+        "present": { "type": "boolean" },
+        "maxBudgetUsd": { "type": "number", "minimum": 0 },
+        "knownPaidEstimateUsd": { "type": "number", "minimum": 0 },
+        "fullKnownPaidSequenceWithinBudget": { "type": "boolean" },
+        "recommendedSliceName": { "type": "string" },
+        "withinBudgetCount": { "type": "integer", "minimum": 0 },
+        "blockedOrUnknownCount": { "type": "integer", "minimum": 0 },
+        "slices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "kind", "status", "command", "prerequisites", "limitations"],
+            "properties": {
+              "name": { "type": "string" },
+              "kind": { "type": "string" },
+              "status": { "enum": ["within_budget", "blocked_by_budget", "unknown_cost", "unknown"] },
+              "maxBudgetUsd": { "type": "number", "minimum": 0 },
+              "estimatedCostUsd": { "type": "number", "minimum": 0 },
+              "billingReadinessCommand": { "type": "string" },
+              "command": { "type": "string" },
+              "prerequisites": { "type": "array", "items": { "type": "string" } },
+              "limitations": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "commandPlanAudit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "checkedCommandCount", "npmScriptCount", "issues"],
+      "properties": {
+        "status": { "enum": ["pass", "warn", "fail"] },
+        "checkedCommandCount": { "type": "integer", "minimum": 0 },
+        "npmScriptCount": { "type": "integer", "minimum": 0 },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["severity", "location", "commandName", "command", "message"],
+            "properties": {
+              "severity": { "enum": ["warn", "fail"] },
+              "location": { "type": "string" },
+              "commandName": { "type": "string" },
+              "command": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "operatorHandoffManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "purpose",
+        "status",
+        "noSpend",
+        "networkCallsMade",
+        "providerCallsMade",
+        "safety",
+        "summary",
+        "blockedInputIds",
+        "operatorInputFiles",
+        "draftFiles",
+        "reportArchiveFiles",
+        "envPlaceholders",
+        "externalEvidencePhasePlan",
+        "commandRunbook",
+        "inputValidationRunbook",
+        "refreshCommands"
+      ],
+      "properties": {
+        "purpose": { "type": "string" },
+        "status": { "enum": ["blocked_by_operator_inputs", "ready_for_live_evidence_sequence"] },
+        "noSpend": { "const": true },
+        "networkCallsMade": { "const": false },
+        "providerCallsMade": { "const": false },
+        "safety": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "shareableWithOperators",
+            "secretValuesIncluded",
+            "rawProviderPayloadsIncluded",
+            "localAbsolutePathsIncluded",
+            "customerMediaIncluded",
+            "releaseEvidence",
+            "operatorInstruction"
+          ],
+          "properties": {
+            "shareableWithOperators": { "const": true },
+            "secretValuesIncluded": { "const": false },
+            "rawProviderPayloadsIncluded": { "const": false },
+            "localAbsolutePathsIncluded": { "const": false },
+            "customerMediaIncluded": { "const": false },
+            "releaseEvidence": { "const": false },
+            "operatorInstruction": { "type": "string" }
+          }
+        },
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requiredInputCount",
+            "configuredInputCount",
+            "missingOrBlockedInputCount",
+            "pendingAfterPaidRunCount",
+            "operatorInputFileCount",
+            "draftFileCount",
+            "reportArchiveFileCount",
+            "commandCount",
+            "readyCommandCount",
+            "blockedCommandCount",
+            "paidCommandCount",
+            "readyPaidCommandCount",
+            "inputValidationCommandCount",
+            "manualReviewInputValidationCommandCount",
+            "commandPlanAuditStatus",
+            "backendReadinessPhaseStatus",
+            "backendReadinessPhaseCount",
+            "backendReadinessPhaseBlockerCount",
+            "secretEnvPlaceholderCount"
+          ],
+          "properties": {
+            "requiredInputCount": { "type": "integer", "minimum": 0 },
+            "configuredInputCount": { "type": "integer", "minimum": 0 },
+            "missingOrBlockedInputCount": { "type": "integer", "minimum": 0 },
+            "pendingAfterPaidRunCount": { "type": "integer", "minimum": 0 },
+            "operatorInputFileCount": { "type": "integer", "minimum": 0 },
+            "draftFileCount": { "type": "integer", "minimum": 0 },
+            "reportArchiveFileCount": { "type": "integer", "minimum": 0 },
+            "commandCount": { "type": "integer", "minimum": 0 },
+            "readyCommandCount": { "type": "integer", "minimum": 0 },
+            "blockedCommandCount": { "type": "integer", "minimum": 0 },
+            "paidCommandCount": { "type": "integer", "minimum": 0 },
+            "readyPaidCommandCount": { "type": "integer", "minimum": 0 },
+            "inputValidationCommandCount": { "type": "integer", "minimum": 0 },
+            "manualReviewInputValidationCommandCount": { "type": "integer", "minimum": 0 },
+            "commandPlanAuditStatus": { "type": "string" },
+            "backendReadinessPhaseStatus": { "type": "string" },
+            "backendReadinessPhaseCount": { "type": "integer", "minimum": 0 },
+            "backendReadinessPhaseBlockerCount": { "type": "integer", "minimum": 0 },
+            "secretEnvPlaceholderCount": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "blockedInputIds": { "type": "array", "items": { "type": "string" } },
+        "operatorInputFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "sourceInputIds",
+              "purpose",
+              "status",
+              "sensitivity",
+              "validationCommand",
+              "present",
+              "evidenceRole"
+            ],
+            "properties": {
+              "path": { "type": "string" },
+              "sourceInputIds": { "type": "array", "items": { "type": "string" } },
+              "purpose": { "type": "string" },
+              "status": { "type": "string" },
+              "sensitivity": { "type": "string" },
+              "validationCommand": { "type": "string" },
+              "present": { "type": "boolean" },
+              "evidenceRole": { "const": "ignored_operator_input" }
+            }
+          }
+        },
+        "draftFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sourceInputId", "path", "kind", "present", "evidenceRole"],
+            "properties": {
+              "sourceInputId": { "type": "string" },
+              "path": { "type": "string" },
+              "kind": { "enum": ["json_draft", "json_template", "markdown_checklist"] },
+              "present": { "type": "boolean" },
+              "copyTo": { "type": "string" },
+              "evidenceRole": { "const": "draft_only_not_release_evidence" }
+            }
+          }
+        },
+        "reportArchiveFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "source", "status", "present", "evidenceRole"],
+            "properties": {
+              "path": { "type": "string" },
+              "source": { "type": "string" },
+              "status": { "type": "string" },
+              "present": { "type": "boolean" },
+              "evidenceRole": { "enum": ["source_report", "required_evidence_report"] }
+            }
+          }
+        },
+        "envPlaceholders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "sensitivity", "required", "configured", "purpose"],
+            "properties": {
+              "name": { "type": "string" },
+              "sensitivity": { "enum": ["public_url", "secret", "boolean"] },
+              "required": { "type": "boolean" },
+              "configured": { "type": "boolean" },
+              "purpose": { "type": "string" }
+            }
+          }
+        },
+        "externalEvidencePhasePlan": { "$ref": "#/$defs/backendEvidencePhasePlan" },
+        "commandRunbook": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/commandRunbookItem" }
+        },
+        "inputValidationRunbook": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/commandRunbookItem" }
+        },
+        "refreshCommands": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "releaseGateSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canRunNoSpendPrep",
+        "canRunLiveNetworkEvidence",
+        "canRunPaidAtlasValidation",
+        "readyPaidGates",
+        "readyPaidGateCount",
+        "shouldDeferFullSequenceSpend",
+        "canReleaseToCustomerTraffic",
+        "releaseBlocker"
+      ],
+      "properties": {
+        "canRunNoSpendPrep": { "type": "boolean" },
+        "canRunLiveNetworkEvidence": { "type": "boolean" },
+        "canRunPaidAtlasValidation": { "type": "boolean" },
+        "readyPaidGates": { "type": "array", "items": { "type": "string" } },
+        "readyPaidGateCount": { "type": "integer", "minimum": 0 },
+        "shouldDeferFullSequenceSpend": { "type": "boolean" },
+        "canReleaseToCustomerTraffic": { "type": "boolean" },
+        "releaseBlocker": { "type": "string" }
+      }
+    },
+    "nextActions": { "type": "array", "items": { "type": "string" } },
+    "error": { "type": "string" }
+  },
+  "$defs": {
+    "backendEvidencePhasePlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "status",
+        "phasePolicy",
+        "phaseCount",
+        "blockerCount",
+        "phases"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "backend_system_readiness_audit",
+            "missing_backend_system_readiness_audit"
+          ]
+        },
+        "status": { "type": "string" },
+        "phasePolicy": { "type": "string" },
+        "phaseCount": { "type": "integer", "minimum": 0 },
+        "blockerCount": { "type": "integer", "minimum": 0 },
+        "phases": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/backendEvidencePhase" }
+        }
+      }
+    },
+    "backendEvidencePhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "label",
+        "status",
+        "blockerCount",
+        "requiredEvidenceKinds",
+        "actionIds",
+        "validationCommands",
+        "reportPaths",
+        "requiresOperatorInput",
+        "requiresPaidProviderOrNetwork",
+        "requiresManualReview",
+        "readyWhen"
+      ],
+      "properties": {
+        "phase": { "type": "integer", "minimum": 0 },
+        "label": { "type": "string" },
+        "status": { "type": "string" },
+        "blockerCount": { "type": "integer", "minimum": 0 },
+        "requiredEvidenceKinds": { "type": "array", "items": { "type": "string" } },
+        "actionIds": { "type": "array", "items": { "type": "string" } },
+        "validationCommands": { "type": "array", "items": { "type": "string" } },
+        "reportPaths": { "type": "array", "items": { "type": "string" } },
+        "requiresOperatorInput": { "type": "boolean" },
+        "requiresPaidProviderOrNetwork": { "type": "boolean" },
+        "requiresManualReview": { "type": "boolean" },
+        "readyWhen": { "type": "string" }
+      }
+    },
+    "commandRunbookItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "index",
+        "name",
+        "kind",
+        "status",
+        "command",
+        "source",
+        "runnable",
+        "requiresLiveNetwork",
+        "requiresProviderSpend",
+        "requiresOperatorConfirmation",
+        "requiresManualReview",
+        "containsPlaceholder"
+      ],
+      "properties": {
+        "section": { "type": "string" },
+        "index": { "type": "integer", "minimum": 0 },
+        "name": { "type": "string" },
+        "kind": { "type": "string" },
+        "status": { "type": "string" },
+        "command": { "type": "string" },
+        "source": { "type": "string" },
+        "sourceInputId": { "type": "string" },
+        "stepIndex": { "type": "integer", "minimum": 1 },
+        "stepCount": { "type": "integer", "minimum": 1 },
+        "runnable": { "type": "boolean" },
+        "requiresLiveNetwork": { "type": "boolean" },
+        "requiresProviderSpend": { "type": "boolean" },
+        "requiresOperatorConfirmation": { "type": "boolean" },
+        "requiresManualReview": { "type": "boolean" },
+        "containsPlaceholder": { "type": "boolean" }
+      }
+    },
+    "commandList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "command"],
+        "properties": {
+          "name": { "type": "string" },
+          "status": { "type": "string" },
+          "kind": { "type": "string" },
+          "command": { "type": "string" },
+          "requiredInputs": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

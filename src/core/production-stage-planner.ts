@@ -1,0 +1,273 @@
+/**
+ * Builds deterministic stage lifecycle evidence for long-form and batch-aware runs.
+ * Inspired by status/report discipline and staged progress tracking,
+ * rewritten as CineJelly-owned TypeScript.
+ */
+
+import type { StoryPlan, RenderedShot } from "../types/agent.js";
+import type { DeliveryGateReport } from "../types/delivery.js";
+import type { ProductionGraphSnapshot } from "../types/graph.js";
+import type { GuardianReport, GuardianStatus } from "../types/guardian.js";
+import type { LongFormCreativeIntelligencePlan } from "../types/long-form-creative-intelligence.js";
+import type { LongFormReadinessPlan } from "../types/long-form-readiness.js";
+import type { MaterialSourceValidationReport, MaterialSourcingPlan } from "../types/material.js";
+import type { PostproductionAssetPlan } from "../types/postproduction-assets.js";
+import type { CompiledPrompt, ShotContract } from "../types/prompt.js";
+import type { ReviewApprovalReport } from "../types/review-approval.js";
+import type {
+  ProductionStageEvidenceValue,
+  ProductionStageName,
+  ProductionStagePlan,
+  ProductionStageRecord,
+  ProductionStageStatus
+} from "../types/stage.js";
+import type { Storyboard } from "../types/storyboard.js";
+import type { VideoRenderStrategyPlan } from "../types/video-render-strategy.js";
+import { createStableId } from "../utils/ids.js";
+import { productionStageSourcePatternOrigins } from "./private-source-pattern-registry.js";
+
+export interface ProductionStagePlannerInput {
+  readonly projectId: string;
+  readonly storyPlan: StoryPlan;
+  readonly shots: readonly ShotContract[];
+  readonly storyboard: Storyboard;
+  readonly storyboardPreflight: GuardianReport;
+  readonly storyboardApprovalReport?: ReviewApprovalReport;
+  readonly materialSourcingPlan: MaterialSourcingPlan;
+  readonly materialSourceValidation?: MaterialSourceValidationReport;
+  readonly postproductionAssetPlan: PostproductionAssetPlan;
+  readonly videoRenderStrategyPlan?: VideoRenderStrategyPlan;
+  readonly longFormCreativeIntelligencePlan?: LongFormCreativeIntelligencePlan;
+  readonly longFormReadinessPlan?: LongFormReadinessPlan;
+  readonly compiledPrompts: readonly CompiledPrompt[];
+  readonly renderedShots: readonly RenderedShot[];
+  readonly deliverablePresent: boolean;
+  readonly deliveryGate?: DeliveryGateReport;
+  readonly productionGraph: ProductionGraphSnapshot;
+}
+
+export class ProductionStagePlanner {
+  public plan(input: ProductionStagePlannerInput): ProductionStagePlan {
+    return {
+      planId: createStableId("stage_plan", input.projectId),
+      projectId: input.projectId,
+      records: [
+        this.record(input, "plan", 0, this.planStatus(input), {
+          sceneCount: input.storyPlan.scenes.length,
+          shotCount: input.shots.length,
+          targetDurationSeconds: input.storyPlan.targetDurationSeconds,
+          videoRenderWorkflowMode: input.videoRenderStrategyPlan?.workflowMode ?? "not_planned",
+          videoRenderContinuityMode: input.videoRenderStrategyPlan?.continuityMode ?? "not_planned",
+          videoRenderRequiresSequential: input.videoRenderStrategyPlan?.requiresSequentialRender ?? false,
+          videoRenderRequiresStoryboardApproval: input.videoRenderStrategyPlan?.requiresStoryboardApproval ?? false,
+          videoRenderStrategyIssueCount: input.videoRenderStrategyPlan?.issueCount ?? 0,
+          longFormCreativeStatus: input.longFormCreativeIntelligencePlan?.status ?? "not_planned",
+          longFormCreativeQualityScore: input.longFormCreativeIntelligencePlan?.qualityScore ?? 0,
+          longFormCreativeFindingCount: input.longFormCreativeIntelligencePlan?.findingCount ?? 0,
+          longFormCreativeRepairDirectiveCount: input.longFormCreativeIntelligencePlan?.repairDirectiveCount ?? 0,
+          longFormReadinessStatus: input.longFormReadinessPlan?.status ?? "not_planned",
+          longFormReadinessIntentKind: input.longFormReadinessPlan?.intentRoute.intentKind ?? "not_planned",
+          longFormReadinessCoherenceScore: input.longFormReadinessPlan?.coherence.overallScore ?? 0,
+          longFormReadinessRepairQueueCount: input.longFormReadinessPlan?.repairQueue.length ?? 0,
+          longFormReadinessManualShotReviewCount: input.longFormReadinessPlan?.adaptiveShotDecisions.filter((decision) => decision.requiresManualReview).length ?? 0
+        }),
+        this.record(input, "storyboard", 1, this.guardianStageStatus(input.storyboardPreflight.status), {
+          storyboardPanelCount: input.storyboard.panels.length,
+          storyboardPreflightStatus: input.storyboardPreflight.status,
+          storyboardApprovalStatus: input.storyboardApprovalReport?.status ?? "not_required",
+          storyboardApprovalCheckpointCount: input.storyboardApprovalReport?.summary.checkpointCount ?? 0,
+          storyboardApprovalCanRender: input.storyboardApprovalReport?.releaseGateSummary.canRenderAfterReview ??
+            !(input.videoRenderStrategyPlan?.storyboardRequired ?? false)
+        }),
+        this.record(input, "prompt", 2, input.compiledPrompts.length > 0 ? "succeeded" : "failed", {
+          compiledPromptCount: input.compiledPrompts.length
+        }),
+        this.record(input, "source_material", 3, this.sourceMaterialStatus(input), {
+          materialBriefCount: input.materialSourcingPlan.briefs.length,
+          remoteSourcesAllowed: input.materialSourcingPlan.briefs.some((brief) => brief.allowRemoteSources),
+          rightsRequirements: this.unique(input.materialSourcingPlan.briefs.map((brief) => brief.rightsRequirement)),
+          preferredSources: this.unique(input.materialSourcingPlan.briefs.flatMap((brief) => brief.preferredSources)),
+          materialValidationStatus: input.materialSourceValidation?.status ?? "not_run",
+          materialCandidateCount: input.materialSourceValidation?.candidateCount ?? 0,
+          selectedMaterialCandidateCount: input.materialSourceValidation?.selectedCandidateCount ?? 0,
+          materialValidationIssueCount: input.materialSourceValidation?.issues.length ?? 0
+        }),
+        this.record(input, "render", 4, this.renderStatus(input.renderedShots), {
+          renderedShotCount: input.renderedShots.length,
+          renderedTestTakeCount: input.renderedShots.filter((shot) => shot.testTake).length,
+          totalCandidateCount: this.totalCandidateCount(input.renderedShots)
+        }),
+        this.record(input, "inspect", 5, this.inspectStatus(input.renderedShots), {
+          blockingInspectionCount: input.renderedShots.filter((shot) => this.isBlockingStatus(shot.renderInspection.status)).length,
+          warningInspectionCount: input.renderedShots.filter((shot) => shot.renderInspection.status === "warn").length
+        }),
+        this.record(input, "repair", 6, this.repairStatus(input.renderedShots), {
+          repairAttemptCount: input.renderedShots.reduce((sum, shot) => sum + shot.repairAttemptCount, 0)
+        }),
+        this.record(input, "assemble", 7, input.deliverablePresent ? "succeeded" : "skipped", {
+          hasDeliverable: input.deliverablePresent,
+          postproductionAssetStatus: input.postproductionAssetPlan.status,
+          captionCueCount: input.postproductionAssetPlan.caption.cueCount,
+          captionBurnIn: input.postproductionAssetPlan.caption.burnIn,
+          audioTrackCount: input.postproductionAssetPlan.audio.trackCount,
+          audioMixEnabled: input.postproductionAssetPlan.audio.enabled,
+          generatedAudioStatus: input.postproductionAssetPlan.generatedAudio.status,
+          generatedAudioIntentCount: input.postproductionAssetPlan.generatedAudio.intentCount,
+          generatedAudioReadyIntentCount: input.postproductionAssetPlan.generatedAudio.readyIntentCount,
+          generatedAudioBlockedIntentCount: input.postproductionAssetPlan.generatedAudio.blockedIntentCount,
+          postproductionAssetIssueCount: input.postproductionAssetPlan.issueCount
+        }),
+        this.record(input, "deliver", 8, this.deliveryStatus(input.deliveryGate), {
+          deliveryGateStatus: input.deliveryGate?.status ?? "not_run"
+        })
+      ]
+    };
+  }
+
+  private record(
+    input: ProductionStagePlannerInput,
+    stage: ProductionStageName,
+    order: number,
+    status: ProductionStageStatus,
+    evidence: Readonly<Record<string, ProductionStageEvidenceValue>>
+  ): ProductionStageRecord {
+    const blockingReason = this.blockingReason(stage, status, evidence);
+    return {
+      stage,
+      order,
+      status,
+      graphNodeIds: this.graphNodeIds(input.productionGraph, stage),
+      evidence,
+      sourcePatternOrigins: productionStageSourcePatternOrigins(stage),
+      ...(blockingReason ? { blockingReason } : {})
+    };
+  }
+
+  private planStatus(input: ProductionStagePlannerInput): ProductionStageStatus {
+    return input.storyPlan.scenes.length > 0 && input.shots.length > 0 ? "succeeded" : "failed";
+  }
+
+  private guardianStageStatus(status: GuardianStatus): ProductionStageStatus {
+    switch (status) {
+      case "pass":
+        return "succeeded";
+      case "warn":
+        return "warn";
+      case "repair":
+      case "rerender":
+      case "block":
+        return "blocked";
+    }
+  }
+
+  private sourceMaterialStatus(input: ProductionStagePlannerInput): ProductionStageStatus {
+    if (input.materialSourcingPlan.briefs.length === 0) {
+      return "skipped";
+    }
+    switch (input.materialSourceValidation?.status) {
+      case "rejected":
+        return "blocked";
+      case "review_required":
+        return "warn";
+      case "approved":
+      case "planned_only":
+      case undefined:
+        return "succeeded";
+    }
+  }
+
+  private renderStatus(renderedShots: readonly RenderedShot[]): ProductionStageStatus {
+    if (renderedShots.length === 0) {
+      return "failed";
+    }
+    if (renderedShots.some((shot) => shot.prediction.status !== "succeeded")) {
+      return "failed";
+    }
+    return "succeeded";
+  }
+
+  private inspectStatus(renderedShots: readonly RenderedShot[]): ProductionStageStatus {
+    if (renderedShots.length === 0) {
+      return "skipped";
+    }
+    if (renderedShots.some((shot) => this.isBlockingStatus(shot.renderInspection.status))) {
+      return "blocked";
+    }
+    if (renderedShots.some((shot) => shot.renderInspection.status === "warn")) {
+      return "warn";
+    }
+    return "succeeded";
+  }
+
+  private repairStatus(renderedShots: readonly RenderedShot[]): ProductionStageStatus {
+    const repairAttemptCount = renderedShots.reduce((sum, shot) => sum + shot.repairAttemptCount, 0);
+    if (repairAttemptCount === 0) {
+      return "skipped";
+    }
+    return renderedShots.some((shot) => this.isBlockingStatus(shot.renderInspection.status)) ? "blocked" : "succeeded";
+  }
+
+  private deliveryStatus(deliveryGate: DeliveryGateReport | undefined): ProductionStageStatus {
+    if (!deliveryGate) {
+      return "skipped";
+    }
+    switch (deliveryGate.status) {
+      case "pass":
+        return "succeeded";
+      case "warn":
+        return "warn";
+      case "block":
+        return "blocked";
+    }
+  }
+
+  private isBlockingStatus(status: GuardianStatus): boolean {
+    return status === "block" || status === "repair" || status === "rerender";
+  }
+
+  private totalCandidateCount(renderedShots: readonly RenderedShot[]): number {
+    return renderedShots.reduce((sum, shot) => sum + shot.candidates.length, 0);
+  }
+
+  private graphNodeIds(graph: ProductionGraphSnapshot, stage: ProductionStageName): readonly string[] {
+    const nodeTypes = this.nodeTypesForStage(stage);
+    return graph.nodes.filter((node) => nodeTypes.has(node.type)).map((node) => node.id);
+  }
+
+  private nodeTypesForStage(stage: ProductionStageName): ReadonlySet<string> {
+    switch (stage) {
+      case "plan":
+        return new Set(["project", "story_arc", "sequence", "scene", "beat", "shot"]);
+      case "storyboard":
+        return new Set(["storyboard_panel"]);
+      case "prompt":
+        return new Set(["reference_selection"]);
+      case "source_material":
+        return new Set(["material_sourcing"]);
+      case "render":
+        return new Set(["clip_render"]);
+      case "inspect":
+        return new Set(["inspection_report"]);
+      case "repair":
+        return new Set(["repair_action"]);
+      case "assemble":
+      case "deliver":
+        return new Set(["deliverable"]);
+    }
+  }
+
+  private unique(values: readonly string[]): readonly string[] {
+    return [...new Set(values)].sort();
+  }
+
+  private blockingReason(
+    stage: ProductionStageName,
+    status: ProductionStageStatus,
+    evidence: Readonly<Record<string, ProductionStageEvidenceValue>>
+  ): string | undefined {
+    if (status !== "blocked" && status !== "failed") {
+      return undefined;
+    }
+    return `${stage} stage ${status}: ${JSON.stringify(evidence)}`;
+  }
+}

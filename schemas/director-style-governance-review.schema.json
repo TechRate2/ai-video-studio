@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cinejelly.local/schemas/director-style-governance-review.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "reviewerType", "checks"],
+  "properties": {
+    "schemaVersion": { "const": "cinejelly.director-style-governance-review.v1" },
+    "reviewerType": { "$ref": "#/$defs/reviewerType" },
+    "status": { "$ref": "#/$defs/reviewStatus" },
+    "artifactBinding": { "$ref": "#/$defs/artifactBinding" },
+    "reviewedAt": { "type": "string", "format": "date-time" },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/check" }
+    },
+    "findings": { "type": "array", "items": { "$ref": "#/$defs/safeReviewText" } }
+  },
+  "$defs": {
+    "safeReviewText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "not": {
+        "anyOf": [
+          { "pattern": "Bearer\\s+[A-Za-z0-9._-]+" },
+          { "pattern": "sk-[A-Za-z0-9_-]+" },
+          { "pattern": "apikey-[A-Za-z0-9]{20,}" },
+          { "pattern": "(api[_-]?key|access[_-]?key|token|secret|password|signature|credential|authorization)\\s*[:=]\\s*[\\\"']?[^\\\"',\\s&]+" },
+          { "pattern": "([?&](?:api[_-]?key|access[_-]?key|token|secret|password|signature|credential|authorization)=)[^&#\\s]+" },
+          { "pattern": "[A-Za-z]:\\\\[^\\s\\\"'<>]+" },
+          { "pattern": "\\/(?:home|Users|var|tmp)\\/[^\\s\\\"'<>]+" },
+          { "pattern": "https?:\\/\\/[^\\s\\\"'<>]+" },
+          { "pattern": "(?:file|s3|gs|ftp):\\/\\/[^\\s\\\"'<>]+" },
+          { "pattern": "data:[^\\s\\\"'<>]+" }
+        ]
+      }
+    },
+    "artifactBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9._:-]+$" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9._:-]+$" },
+        "deliverableSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "reviewerType": { "enum": ["operator", "legal", "product", "security", "hybrid"] },
+    "reviewStatus": { "enum": ["accepted", "needs_review", "rejected"] },
+    "checkName": {
+      "enum": [
+        "directorbench_license_boundary",
+        "upstream_code_reuse_boundary",
+        "runtime_evaluator_independence",
+        "evaluation_asset_permissions"
+      ]
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkName", "status", "evidenceSummary"],
+      "properties": {
+        "checkName": { "$ref": "#/$defs/checkName" },
+        "status": { "$ref": "#/$defs/reviewStatus" },
+        "reviewerType": { "$ref": "#/$defs/reviewerType" },
+        "evidenceSummary": { "$ref": "#/$defs/safeReviewText" },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "findings": { "type": "array", "items": { "$ref": "#/$defs/safeReviewText" } }
+      }
+    }
+  }
+}

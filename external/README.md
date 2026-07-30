@@ -1,0 +1,66 @@
+# External Upstream Source Snapshots
+
+> ## NOTICE — THIRD-PARTY CODE, PUBLISHED UNMODIFIED
+>
+> Everything under `external/upstream/` belongs to its original authors, not to this project.
+> Each directory is an **unmodified snapshot** of a public repository, kept here so engineering work
+> can verify claims against the real source instead of depending on live upstream availability.
+> Every upstream `LICENSE` file is preserved in place.
+>
+> **No production code imports from this directory.** That boundary is machine-enforced —
+> `npm run validation:private-source-lineage-boundary`, part of `npm test`, fails if any file under
+> `src/` imports from here.
+>
+> Four snapshots carry **no license file** (`directorbench`, `open-ai-ugc`,
+> `open-ai-micro-drama-generator`, and `skyreels-v2`, which ships a non-standard model-card license).
+> With no license, the authors reserve all rights: they are present for **reading only**, no code or
+> translation of it may enter `src/`, and any author who wants their snapshot removed should open an
+> issue — it will be deleted on request.
+>
+> `openmontage` is **AGPL-3.0**. Redistributing this unmodified snapshot with its license intact is
+> permitted by that license. What is NOT permitted is copying its code into this product, because
+> AGPL would then oblige the whole product to be released under AGPL. It is behaviour notes only.
+>
+> License status per snapshot is in the inventory table below, and
+> `npm run validation:snapshot-parity` fails if a directory appears here without being declared.
+
+`external/upstream/` contains Git Subtree snapshots of upstream projects used for source-fidelity review, copy/adaptation, and product integration planning. These snapshots are stored so CineJelly engineering work can verify claims, copy useful documentation or structures, adapt prompt patterns, and compare long-form video-agent behavior against original public sources without depending on live upstream availability.
+
+## Integration Boundary
+
+- CineJelly production runtime code lives in `src/`.
+- Productized runtime behavior should normally be copied or adapted into CineJelly-owned modules under `src/`, with attribution and license notes recorded in `docs/`.
+- Production runtime code must not import directly from `external/upstream/`.
+- Code moved into `src/` should be new or substantially adapted CineJelly implementation, not unchanged large upstream files.
+- Implementation files, prompt corpora, tests, demo scripts, or sample assets can become product material only after license/product review and an intentional copy/adapt step.
+- Upstream tests, demos, examples, and development files may exist inside the snapshots because they are part of the original repositories. They are not CineJelly production modules.
+- Source-integrated production behavior should name the upstream snapshot and the CineJelly-specific extension in the relevant design document or source comment.
+
+## Snapshot Inventory
+
+| Local path | Upstream | License status | CineJelly usage policy |
+| --- | --- | --- | --- |
+| `external/upstream/seedance-2.0` | `Emily2040/seedance-2.0` | MIT license file present | Source for Seedance workflow and reference-role patterns; compatible implementation or docs may be reused under MIT with attribution. |
+| `external/upstream/awesome-seedance-2-prompts` | `YouMind-OpenLab/awesome-seedance-2-prompts` | CC BY 4.0 license file present | Source for prompt anatomy and pattern snapshots; exact community prompt text requires CC BY attribution and product review before bundled use. |
+| `external/upstream/vimax` | `HKUDS/ViMax` | MIT license file present | Reference for long-form multi-agent planning, storyboard, reference selection, and consistency validation patterns. |
+| `external/upstream/vibeframe` | `vericontext/vibeframe` | MIT license file present | Reference for deterministic artifacts, cost gates, dry runs, build reports, review reports, and repair loops. |
+| `external/upstream/videoagent` | `HKUDS/VideoAgent` | MIT license file present; nested tool licenses also exist | Reference for video understanding, intent decomposition, and graph-powered tool planning; nested tool licenses require separate review. |
+| `external/upstream/openmontage` | `calesthio/OpenMontage` | AGPL-3.0 license file present | Source for orchestration, approval gates, provider scoring, and self-review; direct implementation reuse must follow AGPL obligations or a legal review decision. |
+| `external/upstream/moneyprinterturbo` | `harry0703/MoneyPrinterTurbo` | MIT license file present | Source for staged one-input video pipeline, material sourcing, batch outputs, subtitles/TTS/BGM, task progress, API/CLI/WebUI, and Docker deployment patterns. |
+| `external/upstream/directorbench` | `jiaminchen-1031/DirectorBench` | No top-level license file in snapshot | Snapshot/audit source for evaluation dimensions and checkpoint ideas until license status is clarified. |
+
+## Update Policy
+
+Add snapshots intentionally with:
+
+```bash
+git subtree add --prefix=external/upstream/<snapshot-name> <repo-url> <branch> --squash
+```
+
+Refresh snapshots intentionally with:
+
+```bash
+git subtree pull --prefix=external/upstream/<snapshot-name> <repo-url> <branch> --squash
+```
+
+Use this flow: review the upstream repo and license, snapshot with `--squash`, decide what to copy/adapt, write the CineJelly-owned implementation or curated data/docs, update attribution, run the redacted secret audit, then commit and push.

@@ -1,0 +1,364 @@
+# Model Provider Abstraction
+> ⚠️ **TÀI LIỆU THIẾT KẾ — KHÔNG PHẢI MÔ TẢ CODE HIỆN TẠI.**
+> Cập nhật lần cuối: **2026-07-02**. Từ đó tới nay mã nguồn đã đổi rất nhiều.
+> Đọc [`BAN-DO-DU-AN.md`](../BAN-DO-DU-AN.md) để biết dự án HIỆN TẠI ra sao.
+> Khi tài liệu này mâu thuẫn với code, **code đúng** — tài liệu là cái sai.
+
+
+## Purpose
+
+CineJelly uses Atlas Cloud as the default provider for both LLM reasoning and Seedance 2.0 rendering, while keeping the system portable to Kie.ai, fal.ai, Runway, Replicate, direct Volcengine, or future providers.
+
+## Sources Used
+
+- Atlas Cloud docs overview for one API key, one endpoint, one billing account, and 300+ models.
+- Atlas Cloud LLM docs for OpenAI-compatible chat completions at `https://api.atlascloud.ai/v1`.
+- Atlas Cloud developer page for model-string swapping and asynchronous image/video predictions.
+- Atlas Cloud CLI docs for schema inspection, media generation, and async polling.
+- Atlas Cloud API docs for LLM `/v1`, video generation `/api/v1/model/generateVideo`, prediction polling, and media upload `/api/v1/model/uploadMedia`.
+- Atlas Cloud Seedance model page for T2V, I2V, reference-to-video, fast variants, Universal Reference, duration, resolution, and aspect ratio information.
+- VibeFrame and OpenMontage Git Subtree snapshots for provider routing, cost gates, reportable provider decisions, and model flexibility.
+- MoneyPrinterTurbo Git Subtree snapshot for multi-provider LLM configuration patterns, queue-aware API behavior, and material-source provider ideas.
+
+Snapshot integration note:
+
+- Provider architecture can copy/adapt useful routing, costing, reporting, and validation patterns from upstream snapshots.
+- Production provider code must remain CineJelly-owned TypeScript under `src/providers`.
+- Production provider code must not import directly from `external/upstream/`.
+- Behavior-critical provider logic such as request compilation, fallback, polling, retry classification, cost recording, or queue admission must follow `docs/FAITHFUL_LOGIC_TRANSLATION_PROCESS.md` when translated from upstream snapshots.
+- MoneyPrinterTurbo's many-provider LLM surface is useful for fallback thinking, but CineJelly keeps Atlas Cloud as the default provider for both LLM reasoning and Seedance 2.0 rendering.
+- MoneyPrinterTurbo's explicit audio stage and OpenMontage's provider-menu discipline inform CineJelly's generated-audio provider contract and provider-neutral execution runner. Atlas `xai/tts-v1` TTS submit/poll execution is wired behind verified capability, schema-review, budget, explicit spend, output-validation, and manual-review gates; BGM/ambience/SFX still require verified provider mappings before use.
+- Generated-audio execution planning is handled before provider calls by CineJelly-owned core logic. The planner may create provider-neutral `AudioGenerationRequest` records from verified capabilities, but it must not call providers or claim generated outputs.
+- Generated-audio output validation is handled after provider results and before audio mixing. Provider result batches are first reconciled against the ready execution plan so missing, duplicate, blocked-intent, or unexpected results cannot silently enter the mix. A provider result must not become an `AudioMixTrack` unless it passes status, identity, kind, provider, model, duration, volume, and safe-URL checks. `asset://` generated-audio outputs require a reviewed CineJelly asset resolver entry that maps the asset to a credential-free HTTPS URL before mixing.
+- Generated-audio asset resolution catalogs are operator-owned JSON inputs validated by preflight through `CINEJELLY_GENERATED_AUDIO_ASSET_RESOLUTION_CATALOG_PATH`; they do not enable provider-backed audio generation by themselves.
+
+## Design Goal
+
+Application services should not know Atlas-specific request fields. They should ask for capabilities:
+
+- reason over a brief
+- produce structured planning JSON
+- register a media asset
+- render a video from text
+- render a video from image
+- render from references
+- extend or edit a video
+- generate narration, BGM, ambience, or SFX when an audio provider is explicitly configured
+- poll a job
+- inspect provider cost/status
+
+The provider layer translates those requests into actual API calls.
+
+## Provider Interfaces
+
+### LLMProvider
+
+```text
+LLMProvider
+  chat(request) -> ChatResponse
+  structured(request, schema) -> StructuredResponse
+  stream(request) -> AsyncTokenStream
+  capabilities() -> LLMCapabilities
+```
+
+Required capabilities:
+
+- OpenAI-compatible messages
+- streaming optional
+- JSON/structured output support or fallback repair
+- model ID configurable
+- timeout and retry policy
+- cost metadata when available
+
+Atlas implementation:
+
+- base URL: `https://api.atlascloud.ai/v1`
+- API key: `ATLASCLOUD_API_KEY`
+- OpenAI SDK compatible according to Atlas docs.
+
+### VideoProvider
+
+```text
+VideoProvider
+  generate_text_to_video(request) -> Prediction
+  generate_image_to_video(request) -> Prediction
+  generate_reference_to_video(request) -> Prediction
+  edit_video(request) -> Prediction
+  extend_video(request) -> Prediction
+  get_prediction(prediction_id) -> PredictionStatus
+  capabilities(model_id) -> VideoCapabilities
+```
+
+Required capabilities:
+
+- supported modes
+- supported durations
+- supported resolutions
+- supported ratios
+- supported reference types
+- async polling
+- output URL extraction
+- error normalization
+- cost metadata when available
+
+Atlas implementation:
+
+- default provider for Seedance 2.0 and Seedance 2.0 Fast.
+- use current Atlas model schema to map fields such as prompt, image, last image, duration, resolution, ratio, generate audio, watermark, and return last frame.
+- use async prediction submit/poll flow.
+
+### AssetProvider
+
+```text
+AssetProvider
+  register_asset(request) -> AssetRegistration
+  get_asset(asset_id) -> AssetStatus
+  wait_until_active(asset_id) -> AssetStatus
+  delete_asset(asset_id) -> DeleteStatus
+```
+
+Atlas implementation:
+
+- Media/upload host: `https://api.atlascloud.ai/api/v1`.
+- Clean public `https://` reference URLs and already-issued `asset://` references can be passed through without upload when the selected model path supports direct reference input.
+- Local operator media files, if admitted by a future operator tool, must be uploaded with `POST /model/uploadMedia` before generation.
+- Generation and upload share the documented Atlas media base URL; LLM calls use `https://api.atlascloud.ai/v1`.
+- Successful uploads may return a temporary provider URL or provider reference ID; mappers must accept documented nested `data` payloads and avoid creating malformed `asset://https://...` references.
+
+### AudioProvider
+
+```text
+AudioProvider
+  generate_audio(request) -> AudioGenerationResult
+  audio_capabilities(model_id) -> AudioGenerationCapabilities
+```
+
+Required capabilities:
+
+- supported generated-audio kinds: TTS narration, BGM, ambience, SFX
+- supported output formats
+- maximum duration per generated asset
+- async or synchronous behavior
+- output URL or asset ID mapping
+- usage/cost metadata when available
+- error normalization and cancellation behavior
+
+Current Atlas implementation:
+
+- `src/providers/contracts.ts` defines the provider-neutral `AudioProvider` boundary.
+- `src/providers/atlascloud/atlas-cloud-provider.ts` reports generated-audio capabilities only from reviewed `ATLASCLOUD_GENERATED_AUDIO_CAPABILITIES_JSON` and runs Atlas `generateAudio` only for capability-mapped requests.
+- `src/core/generated-audio-execution-planner.ts` maps bounded generated-audio intents to provider-neutral requests only when `audio_capabilities()` returns verified capability records.
+- `src/core/generated-audio-provider-execution-runner.ts` executes only ready generated-audio requests through an `AudioProvider`, preserves plan order, and turns provider exceptions into failed/timeout/canceled result evidence for batch validation.
+- `src/core/generated-audio-output-validator.ts` approves result-to-track conversion only for credential-free HTTPS generated audio output; `src/core/generated-audio-asset-resolver.ts` can resolve approved generated-audio `asset://` records to credential-free HTTPS URLs without provider calls, downloads, or generated files.
+- `CINEJELLY_GENERATED_AUDIO_ASSET_RESOLUTION_CATALOG_PATH` can point to an operator-owned catalog of approved resolver entries; preflight validates catalog shape, duplicate asset IDs, `asset://` source URIs, HTTPS resolved URLs, and approval flags.
+- This is intentional until the current Atlas audio model schema, endpoint payload, output format, model IDs, pricing, and artifact validation path are verified.
+- Generated-audio requests therefore remain `planned_only` or `ready_for_provider` postproduction evidence unless verified provider capabilities are configured and the provider-neutral runner produces explicit result evidence that passes batch output validation.
+
+### MediaInspector
+
+```text
+MediaInspector
+  probe(file_or_url) -> MediaMetadata
+  sample_frames(file_or_url, policy) -> FrameSet
+  inspect_audio(file_or_url) -> AudioReport
+  inspect_timeline(deliverable) -> DeliveryReport
+```
+
+This is provider-neutral and may use ffprobe, frame sampling, audio analysis, and VLM/MLLM calls.
+
+## Core Domain Types
+
+### ProviderRequest
+
+```json
+{
+  "provider": "atlascloud",
+  "model_family": "seedance_2",
+  "mode": "image_to_video",
+  "prompt": "provider-ready prompt",
+  "references": [],
+  "settings": {
+    "duration_seconds": 8,
+    "resolution": "720p",
+    "ratio": "16:9",
+    "generate_audio": true,
+    "watermark": false
+  },
+  "metadata": {
+    "project_id": "project_...",
+    "shot_id": "scene_01_shot_03"
+  }
+}
+```
+
+### ProviderCapability
+
+```json
+{
+  "provider": "atlascloud",
+  "model_id": "configured-at-runtime",
+  "modes": ["text_to_video", "image_to_video", "reference_to_video"],
+  "durations": { "min": 4, "max": 15 },
+  "resolutions": ["480p", "720p", "1080p"],
+  "ratios": ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+  "references": ["image", "video", "audio", "first_frame", "last_frame"],
+  "async": true
+}
+```
+
+Important:
+
+- This is a desired normalized capability structure.
+- Actual values must be loaded from provider docs, schema inspection, or configuration.
+- If Atlas docs and articles differ, the current model schema wins.
+- When no reviewed Seedance capability JSON is configured, the Atlas fallback capability map is intentionally conservative for Mini models: `480p`/`720p` only. Operator-reviewed capability JSON can broaden or narrow any model after schema verification.
+
+## Atlas Cloud Default Configuration
+
+Environment:
+
+- `ATLASCLOUD_API_KEY`: required for Seedance rendering, media upload operations, and LLM calls when no separate LLM key is configured.
+- `ATLASCLOUD_LLM_API_KEY`: optional separate Atlas Cloud key for OpenAI-compatible LLM calls. If absent, the provider uses `ATLASCLOUD_API_KEY` for LLM calls.
+- `ATLASCLOUD_LLM_BASE_URL`: optional override for the LLM base URL. Default: `https://api.atlascloud.ai/v1`.
+- `ATLASCLOUD_MEDIA_BASE_URL` or `ATLASCLOUD_BASE_URL`: optional override for image/video/upload calls. Default: `https://api.atlascloud.ai/api/v1`.
+- When an override uses the official `api.atlascloud.ai` host, runtime config and preflight require the matching documented path: `/v1` for LLM calls and `/api/v1` for image/video/upload calls.
+
+LLM:
+
+- Base URL: `https://api.atlascloud.ai/v1`
+- Format: OpenAI ChatCompletion compatible.
+- Default reasoning model should be configured, not hardcoded. Candidates can include DeepSeek, Kimi, Qwen, GLM, MiniMax, or Doubao families depending on required context length, reasoning, language, and cost.
+
+Video:
+
+- Default family: Seedance 2.0.
+- Fast family: Seedance 2.0 Fast.
+- Exact model IDs must be stored in configuration and verified through Atlas schema inspection.
+
+Media references:
+
+- Pass clean public `https://` or reviewed `asset://` references directly when supported by the configured Atlas model capability.
+- Upload local media with `/model/uploadMedia` before generation only when local-file reference intake is explicitly added and validated.
+- Keep Atlas generated-audio paid validation gated on reviewed audio schema, model IDs, pricing, output validation, and manual review.
+
+## Provider Selection Policy
+
+Default:
+
+- Atlas Cloud for all LLM and video operations.
+- Seedance 2.0 for high-control cinematic and consistency work.
+- Seedance 2.0 Fast for cost/speed-sensitive work.
+
+Future provider routing:
+
+| Need | Default | Possible Future Provider |
+|---|---|---|
+| Seedance 2.0 via unified API | Atlas Cloud | Kie.ai, fal.ai, Runway, Replicate, direct Volcengine |
+| Complex motion realism | Atlas Cloud model router | Kling, Veo, Wan, Runway |
+| Long-context script analysis | Atlas Cloud LLM | direct OpenAI, Anthropic, Google, local LLM |
+| Video understanding | Atlas Cloud or local pipeline | VideoAgent-like VLM stack |
+| Generated narration/BGM/ambience/SFX | Disabled until verified generated-audio capability config exists | Atlas audio models or specialized TTS/music/SFX providers after schema, pricing, rights, and validation review |
+| Licensed material sourcing | CineJelly governed material layer | Pexels, Pixabay, Coverr, user-provided library, paid stock APIs |
+| Postproduction utilities | local tools | cloud render farms |
+
+The Source Video Auto Analysis Adapter uses this same provider boundary: sampled frames are sent through `LlmProvider.structured` as image inputs, normalized into CineJelly's `SourceVideoDeconstruction`, and never expose Atlas-specific payload details to graph or prompt modules.
+
+## Request Lifecycle
+
+1. Application creates a provider-neutral request.
+2. Provider registry resolves provider and model.
+3. Capability validator checks duration, resolution, ratio, references, and mode before media upload or paid generation calls.
+4. AssetProvider passes through clean `https://`/`asset://` references or uploads local media only when needed.
+5. VideoProvider submits generation.
+6. Worker polls prediction.
+7. Provider mapper extracts output URLs from documented direct fields and common nested response containers such as `output`, `result`, `data`, `videos`, and `files`.
+8. Output is persisted to ClipRender.
+9. Optional material-source provider calls are recorded as material candidate evidence with source, rights, duration, hash, and rejection/selection status.
+10. Cost and status are logged.
+11. Consistency Guardian inspects output.
+
+## Error Normalization
+
+All providers must normalize errors:
+
+- `AUTHENTICATION_FAILED`
+- `INSUFFICIENT_CREDITS`
+- `RATE_LIMITED`
+- `INVALID_SCHEMA`
+- `ASSET_NOT_ACTIVE`
+- `ASSET_VALIDATION_FAILED`
+- `MODEL_UNAVAILABLE`
+- `GENERATION_FAILED`
+- `POLLING_TIMEOUT`
+- `OUTPUT_MISSING`
+- `UNSUPPORTED_SETTING`
+
+Provider HTTP clients must preserve status-based classification even when a provider returns an HTML, plaintext, or otherwise non-JSON error body. Non-JSON body previews may be kept for operator diagnostics only after redaction and truncation; raw provider error bodies must not enter artifacts, API responses, or logs.
+
+Provider JSON metadata bodies must be read with a configurable byte cap before JSON parsing. The cap protects LLM, prediction, and media upload metadata paths from abnormal provider responses; rendered clip/audio media uses the dedicated streaming media limits instead.
+
+## Cost Ledger
+
+Every provider call records:
+
+- provider
+- model ID
+- mode
+- input references
+- duration
+- resolution
+- prediction ID
+- media reference ID or URL when upload/direct-reference preparation is involved
+- requested at
+- completed at
+- status
+- provider terminal status when known
+- provider error code when a call fails
+- retryable flag when a call fails
+- provider-returned usage metadata when available
+- estimated cost
+- actual cost when available
+- retry count
+- graph node
+
+Runtime implementation:
+
+- Atlas LLM chat entries record provider-returned estimated or actual cost when the response exposes usage pricing fields.
+- Atlas video submit, get-prediction, and wait-prediction entries record prediction IDs when available.
+- Atlas media upload/direct-reference entries record provider reference IDs or URLs when available.
+- Atlas video entries also record provider-returned usage, estimated cost, or actual cost when prediction usage includes those fields.
+- Atlas wait-prediction entries record terminal `succeeded`, `failed`, `canceled`, and `timeout` outcomes rather than hiding async job outcomes behind generic HTTP call status.
+- Atlas retryable LLM, video submit, prediction polling, and media upload HTTP calls record the actual number of retry attempts in the provider ledger.
+- Atlas generated-audio execution attempts, if called before verified capabilities exist, fail before network spend and can record an `audio.generate` ledger entry with `MODEL_UNAVAILABLE`. The provider-neutral execution runner can call only ready planned items when an `AudioProvider` and verified capabilities are present; Atlas `generateAudio` submit/poll execution is available only through that verified capability path.
+- Prediction polling accepts optional model and graph metadata context so long-form polling entries can be traced back to the originating shot.
+- Review packets summarize failed, timeout, and canceled provider operation counts from the ledger.
+
+This follows VibeFrame/OpenMontage cost-gate thinking and is required for commercial operation.
+
+## Provider Abstraction Rules
+
+- No application service imports Atlas-specific request DTOs.
+- No prompt compiler emits provider-only fields.
+- No model ID is hardcoded in business logic.
+- No code assumes 1080p is available for every model path.
+- No code assumes reference count limits without reading provider capability.
+- Capability validation must run before media upload or paid generation so unsupported requests do not spend provider calls unnecessarily.
+- No code uploads media or rewrites references when a clean direct `https://` or reviewed `asset://` reference is already supported by the selected Atlas path.
+- No fallback provider is used without graph metadata recording.
+- No provider implementation imports directly from `external/upstream/`; snapshot-derived logic must be written as CineJelly-owned provider code.
+- Material-source adapters, when added, must follow the same provider-neutral contract, credential redaction, cost/status logging, and rights metadata rules as render providers.
+- Generated-audio providers must not be enabled until provider schema, output URI safety, duration validation, model IDs, pricing, and artifact review are verified. Do not claim generated audio from `generatedAudioIntents` without a real `AudioGenerationResult`.
+
+## Future Provider Onboarding Checklist
+
+1. Implement interfaces.
+2. Map capabilities.
+3. Add schema validation.
+4. Add auth config.
+5. Add request/response logging with redaction.
+6. Add error normalization.
+7. Add cost extraction.
+8. Add asset upload or registration path.
+9. Add output URL persistence.
+10. Add Consistency Guardian expectations.
+11. Run production validation with real paid provider calls before enabling customers.

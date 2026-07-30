@@ -1,0 +1,539 @@
+# Production Graph and Long-Form Strategy
+> ⚠️ **TÀI LIỆU THIẾT KẾ — KHÔNG PHẢI MÔ TẢ CODE HIỆN TẠI.**
+> Cập nhật lần cuối: **2026-07-02**. Từ đó tới nay mã nguồn đã đổi rất nhiều.
+> Đọc [`BAN-DO-DU-AN.md`](../BAN-DO-DU-AN.md) để biết dự án HIỆN TẠI ra sao.
+> Khi tài liệu này mâu thuẫn với code, **code đúng** — tài liệu là cái sai.
+
+
+## Purpose
+
+This document defines how CineJelly creates coherent 2 to 8 minute videos from a single input while Seedance 2.0 operates on short renderable clips. The strategy combines copied/adapted structures from Git Subtree snapshots with CineJelly-owned graph contracts and commercial delivery rules.
+
+## Sources Used
+
+- ViMax Git Subtree snapshot for RAG-based long script design, multi-scene scripts, storyboard design, multi-camera simulation, intelligent reference selection, parallel candidate generation, and consistency validation.
+- VibeFrame Git Subtree snapshot for storyboard/design source-of-truth artifacts, dry runs, build reports, review reports, render inspection, and deterministic repair loops.
+- DirectorBench for long-form checkpoint evaluation across script, visual, audio, cross-modal, and stability dimensions.
+- VideoAgent Git Subtree snapshot for intent analysis, graph-powered workflow planning, video understanding, editing, and remaking.
+- OpenMontage Git Subtree snapshot for reference-video analysis, transcript/pacing/keyframe/style extraction, approval gates, cost estimates, provider scoring, real-footage retrieval, and self-review.
+- MoneyPrinterTurbo Git Subtree snapshot for end-to-end script/material/audio/subtitle/final-video stages, task progress, batch outputs, local/stock material sourcing, and API/CLI/WebUI operator surfaces.
+- Atlas Cloud Seedance docs for clip duration, multimodal references, asset registration, async prediction, and resolution settings.
+
+Faithful translation note: when long-form segmentation, storyboard ordering, dependency scheduling, reference selection, material sourcing, task progress, or batch output lifecycle is translated from an upstream snapshot, create a Reference Implementation using `docs/FAITHFUL_LOGIC_TRANSLATION_PROCESS.md` before changing production code.
+
+## Why a Production Graph
+
+Long-form video fails when the system treats the whole job as one prompt. A graph gives CineJelly:
+
+- Repairable units.
+- Continuity memory.
+- Parallel execution where safe.
+- Shot-level cost and latency tracking.
+- Reusable reference lineage.
+- User-facing review checkpoints.
+- Fine-grained diagnostics.
+
+Extension based on ViMax + VibeFrame + DirectorBench + VideoAgent + OpenMontage + MoneyPrinterTurbo snapshots:
+
+- ViMax contributes multi-agent scene/shot decomposition and consistency-aware reference reuse.
+- VibeFrame contributes deterministic artifacts, build/inspect reports, and cost gates.
+- DirectorBench contributes checkpoint-level evaluation.
+- VideoAgent contributes intent decomposition and graph-powered planning.
+- OpenMontage contributes reference-video analysis, approval gates, and self-review loops.
+- MoneyPrinterTurbo contributes staged one-input automation, material sourcing, task progress, and batch output patterns.
+- CineJelly combines these into a typed graph that drives production, material/reference sourcing, rendering, inspection, repair, batch evidence, and commercial delivery.
+
+## Graph Hierarchy
+
+```text
+Project
+  AudienceProfile
+  ReferenceLibrary
+  MaterialLibrary
+  StoryArc
+    Sequence
+      Scene
+        Beat
+          Shot
+            ClipRender
+              InspectionReport
+              RepairAction
+  StageLifecycle
+  Timeline
+  Deliverable
+```
+
+## Node Contracts
+
+### Project
+
+Contains:
+
+- user request
+- product/business context
+- target duration
+- target platforms
+- selected tier
+- selected resolution
+- selected quality mode
+- budget/cost ceiling
+- language and localization settings
+- safety and rights constraints
+
+### ReferenceLibrary
+
+Contains:
+
+- original user files or URLs
+- normalized asset records
+- role labels
+- Atlas Cloud asset IDs where required
+- embeddings and thumbnails
+- validation results
+- usage lineage
+
+Reference roles:
+
+- identity
+- product
+- wardrobe
+- environment
+- motion
+- camera
+- audio tempo
+- voice
+- style
+- first frame
+- last frame
+- source video structure
+
+Runtime implementation:
+
+- Intake routes every supplied reference through the Reference Librarian before LLM planning or render spend.
+- The Reference Librarian normalizes missing labels, infers safe media kind defaults, validates role/kind compatibility, accepts only absolute `http(s)` or `asset://` reference URIs for the current Atlas path, rejects credential-like reference URIs, and deduplicates repeated references.
+- Production Graph Builder creates one validated `reference_asset` node per normalized reference, then connects references to dependent shots.
+- Identity and wardrobe references add `continues_identity` edges, environment and style references add `continues_environment` edges, and motion/camera/audio/source-structure references add `matches_motion` edges.
+- Optional source-video deconstruction can be caller-supplied or generated by the opt-in Source Video Auto Analysis Adapter from bounded sampled frames of a clean HTTPS `source_video_structure` reference. In both cases it is normalized through the Source Video Analyst, matched to a `source_video_structure` reference label when supplied, and stored on the project node so planning, artifacts, review packets, and repairs can trace the structural source and the upstream snapshot patterns that shaped the feature.
+
+### Video Render Strategy
+
+The long backend must not hardcode every request into multishot rendering. `VideoRenderStrategyPlanner` creates a no-spend `video-render-strategy.json` contract after shot planning and reference selection, before provider spend.
+
+It resolves:
+
+- `auto`, `single`, `storyboard`, `multishot`, `reference_locked`, `source_video`, or `manual_storyboard` user intent.
+- `single_clip`, `reference_locked_single_clip`, `storyboard_multishot`, `reference_locked_multishot`, `source_video_guided`, or `manual_storyboard` workflow mode.
+- Continuity mode: single clip, prompt-only, reference locked, last-frame chaining, source-video guided, or manual locked.
+- Whether storyboard approval is required before customer-facing paid render.
+- Whether the render scheduler must force sequential batches for reference lock, last-frame chaining, source-video guidance, or manual storyboard control.
+
+Rules:
+
+- Short one-shot requests can remain one clip when the planned shot count and duration are compatible.
+- User-selected `single` mode blocks provider spend if planning accidentally creates a multishot plan.
+- User-selected `reference_locked` mode blocks provider spend when no lockable identity/product/environment/style/endpoint reference exists.
+- Prompt-only multishot is allowed for operator validation but is marked as continuity risk and requires last-frame chaining evidence.
+- Source-video guided workflows require source-video analysis or source-video structure references before paid render.
+- Strategy evidence is no-spend/no-network/no-provider and stores reference roles/counts/labels, not raw provider URLs.
+- Storyboard-required workflows now pass through `StoryboardApprovalGate` after storyboard preflight and before model selection, cost estimation, prompt preflight, or provider calls.
+- Direct runtime callers may approve via metadata: `storyboardApproval=approved`, `storyboardReviewer`, and `storyboardReviewedAt`.
+- Async `/v1/render-jobs` callers may approve through formal `reviewApprovalCheckpoints`; approved pre-render review is bridged into internal storyboard approval metadata before DirectorAgent starts.
+- Approved multishot/source/manual runs emit `storyboard-approval.json`, run-summary fields, review-packet planning fields, and stage lifecycle evidence.
+- When last-frame chaining is required or recommended, DirectorAgent renders sequentially, selects the previous shot's image sidecar, recompiles the next shot with a `first_frame` reference, and stores only chain metadata/digests in public smoke evidence.
+
+Validation:
+
+- `npm run validation:video-render-strategy`
+- `npm run validation:storyboard-approval-gate`
+- `npm run validation:last-frame-chaining`
+- `ProjectArtifactValidator` treats `video_render_strategy` as a required success artifact for new runs.
+- `ProjectArtifactValidator` requires `storyboard_approval` for successful storyboard-required runs and verifies it is approved before accepting render evidence.
+
+### Long-Form Creative Intelligence
+
+Long-form quality is not only "can render". CineJelly now emits a no-spend `long-form-creative-intelligence.json` artifact after timeline/postproduction planning and before provider spend.
+
+It combines:
+
+- Story Bible: logline, central question, emotional arc, anchor rules, payoff, character/product/environment/style anchors.
+- Niche and viral strategy: shared audience/niche intelligence, user presentation style, audience, platform intent, trend posture, viewer objection, proof strategy, share trigger, idea seeds, hook pattern, retention beats, desired viewer action, viral levers, and anti-patterns.
+- Director quality findings: weak hook, weak payoff, missing anchors, bridge gaps, repetitive shot language, long-shot retention risk, caption/audio timing gaps, source-video alignment gaps, and upstream planning blockers.
+- Shot directives: shot-level viral role, target emotion, quality checks, continuity anchors, recommended candidate count, and repair priority.
+- Multi-candidate directives: identifies high-impact/risky hook, payoff, reference-sensitive, transition, face, product-logo, or source-video shots that deserve more candidate coverage.
+- Auto-repair directives: records whether each repair can be handled before render by story/sequence/shot/prompt/postproduction/timeline regeneration, or requires manual review.
+- Audio/caption QA: caption coverage ratio, generated-audio readiness, timing issue count, and postproduction recommendations.
+
+The planner is deterministic TypeScript and makes no network, LLM, Atlas, or upstream runtime calls. It consumes the same `AudienceNicheIntelligencePlanner` used by Short, so messy briefs, product facts, creative-direction notes, revisions, or launch-style input map into the same niche, format, funnel, trend, proof, objection, share, CTA, and idea-seed evidence before either Short or Long spends provider budget. It is a UI-facing director-quality artifact: the future Create/Review interface can explain why the backend chose a workflow, which shots need stronger candidates, what to repair before spend, and what must be manually reviewed before customer release.
+
+`LongDirectorUiContract` compresses that rich artifact into a stable review-console contract. It exposes Long Director narrative/continuity modes, checkpoint stages, candidate and repair counts, provider-spend disabled state, manual quality/redaction review requirements, and DirectorBench-style evidence requirements so UI clients can render the workflow without duplicating backend decision logic.
+
+New run artifact bundles persist this surface as `long-director-ui-contract.json`. `run-summary.json` and `review-packet.json` expose the compact ready/narrative/checkpoint/review/spend/repair fields, while `ProjectArtifactValidator` checks the contract against `long-form-creative-intelligence.json` to catch drift before UI/API integration.
+
+The API also exposes `POST /v1/long-form/director-ui-contract` for UI clients that already have `long-form-creative-intelligence.json` evidence. The route validates the plan as no-spend/no-network/no-provider evidence, rejects spend-boundary drift, returns 200 for ready/review-required contracts, and returns 422 with a blocked contract when the creative evidence itself is blocked.
+
+Validation:
+
+- `npm run validation:long-form-creative-intelligence`
+- New DirectorAgent runs write `long-form-creative-intelligence.json` and `long-director-ui-contract.json`, expose quality/status/directive plus Long Director review-console counts in `run-summary.json`, include creative/Long Director evidence in `review-packet.json`, and keep the API route covered by the long-form creative intelligence smoke.
+- `ProjectArtifactValidator` validates the creative artifact when present while keeping older paid evidence bundles backward compatible.
+
+### MaterialLibrary
+
+Inspired by MoneyPrinterTurbo's local/remote material sourcing, CineJelly can maintain a governed material library for non-generated footage, reference plates, stock clips, product plates, audio beds, and subtitle/BGM assets.
+
+Contains:
+
+- search terms derived from approved story and shot contracts
+- source preference: user-provided, local library, Pexels, Pixabay, Coverr, or future licensed stock providers
+- aspect ratio, duration, resolution, rights, and credential requirements
+- selected material candidates with provider, URI, duration, hash, and usage lineage
+- rejection reasons for weak, unsafe, duplicate, or rights-incompatible materials
+
+Rules:
+
+- Material sourcing is optional and never bypasses Atlas Cloud as the default Seedance render provider.
+- Remote material sources must satisfy licensing, HTTPS, credential, duration, and size constraints before becoming Production Graph evidence.
+- Product code must implement this as CineJelly-owned TypeScript; MoneyPrinterTurbo service code stays in the snapshot layer.
+
+Runtime implementation:
+
+- `MaterialSourcingPlanner` creates a governed `MaterialSourcingPlan` for every run after shot planning and reference selection.
+- `ProductionGraphBuilder` stores the plan as a `material_sourcing` node and links shot nodes that own material briefs to that evidence.
+- Every brief records source policy, query terms, aspect ratio, resolution, target duration, max candidate count, remote-source allowance, and rights requirement.
+- DirectorAgent now resolves optional operator-owned local catalog candidates and opt-in remote stock candidates before `MaterialSourceValidator`; live remote provider validation with real keys remains pending and must preserve the same rights metadata.
+
+### StageLifecycle
+
+Inspired by VibeFrame's deterministic project loop and MoneyPrinterTurbo's visible task progress, CineJelly records a run-level stage lifecycle.
+
+Stages:
+
+- plan
+- storyboard
+- prompt
+- source_material
+- render
+- inspect
+- repair
+- assemble
+- deliver
+
+Runtime implementation:
+
+- `ProductionStagePlanner` emits a deterministic `ProductionStagePlan` with all nine stages in order.
+- Each record contains status, graph node IDs, evidence counts, source-pattern origins, and blocking reason when a stage fails or blocks.
+- Review packets expose `stageLifecycle`, and durable artifacts include `stage-lifecycle.json`.
+- `run-summary.json` includes compact stage status pairs for fast operator scanning.
+- Active async render jobs also retain bounded stage progress events before final artifacts exist; list responses expose compact current-stage fields, while per-job polling exposes the retained event list.
+
+### StoryArc
+
+Contains:
+
+- hook
+- premise
+- progression
+- climax/payoff
+- call to action or resolution
+- audience promise
+- emotional rhythm
+
+### Sequence
+
+Long-form grouping that allows parallel and staged production:
+
+- 2-minute video: usually 3 to 6 sequences.
+- 8-minute video: usually 8 to 16 sequences.
+
+Runtime implementation:
+
+- `ProductionGraphBuilder` now creates explicit `sequence` nodes between `story_arc` and `scene`, grouping contiguous scenes deterministically from target duration and scene count instead of wiring story directly to scenes.
+- `LongFormSequencePlanner` shares the same deterministic grouping between Production Graph and continuity evidence so sequence IDs, scene membership, order, and duration reasoning stay aligned.
+- `ProjectArtifactValidator` treats `story_arc`, `sequence`, `scene`, `shot`, and `material_sourcing` nodes as required production-graph evidence and checks sequence data, parent edges, and deterministic order.
+- `tests/run-production-graph-sequence-smoke.mjs` proves the no-spend hierarchy for one-scene, 120-second, and 480-second graph fixtures, including documented sequence-count ranges and no direct `story_arc -> scene` dependency edges.
+
+### Scene
+
+Contains:
+
+- location
+- time
+- characters/products present
+- environment anchors
+- lighting continuity
+- audio environment
+- narrative function
+
+### Beat
+
+The smallest story unit:
+
+- information reveal
+- emotional turn
+- product benefit
+- action moment
+- transition bridge
+- proof point
+- joke/payoff
+- visual motif
+
+### Shot
+
+The renderable contract:
+
+- duration, usually 4 to 15 seconds depending on provider support
+- shot scale
+- camera movement
+- action
+- lighting
+- audio cue
+- reference bindings
+- start and end state
+- transition handles
+- inspection checklist
+
+### ClipRender
+
+Provider job:
+
+- provider
+- model ID
+- schema version
+- request payload
+- prediction ID
+- status
+- cost estimate and actual cost
+- output URLs
+- returned last frame if available
+- errors
+
+### InspectionReport
+
+DirectorBench-inspired:
+
+- script score
+- visual score
+- audio score
+- cross-modal score
+- stability score
+- transition score
+- identity score
+- product score
+- repair recommendation
+
+## Long-Form Duration Planning
+
+Atlas Cloud sources describe Seedance 2.0 clips in the 4 to 15 second range. Therefore:
+
+- 2 minutes requires roughly 8 to 30 clips.
+- 8 minutes requires roughly 32 to 120 clips.
+- Higher quality usually favors more, shorter, repairable shots.
+- Lower cost may favor fewer, longer multi-shot clips.
+
+Clip duration policy:
+
+- 4 seconds: test takes, risky identity/motion shots, transition probes.
+- 5 to 8 seconds: standard commercial shots and dialogue beats.
+- 9 to 12 seconds: stable one-action shots.
+- 13 to 15 seconds: one-shot product showcases or controlled internal multi-shot prompts.
+
+## Long-Form Pipeline
+
+1. Intake one user input.
+2. Analyze references and source videos.
+3. Build audience and platform profile.
+4. Generate story arc.
+5. Segment into sequences, scenes, beats, and shots.
+6. Build continuity ledgers.
+7. Assign reference roles.
+8. Compile shot contracts.
+9. Run preflight and cost plan.
+10. Render test takes for risky shots.
+11. Render approved shots.
+12. Inspect and repair.
+13. Assemble timeline.
+14. Inspect full video.
+15. Export final deliverables.
+
+## Script From Long Video
+
+If the user provides a long source video, CineJelly uses a VideoAgent/OpenMontage-style intake:
+
+- extract transcript
+- detect scenes
+- sample keyframes
+- infer pacing
+- identify visual style
+- identify camera grammar
+- identify audio rhythm
+- identify structural beats
+- preserve only user-approved creative intent
+- create a rights-safe, differentiated script and shot plan from the structural analysis
+
+The source video becomes a structural reference, not a license to reproduce protected material.
+
+Runtime implementation:
+
+- Public render requests may include `sourceVideoAnalysis` with bounded transcript cues, scene deconstructions, keyframes, pacing notes, style notes, structural beats, and safety notes.
+- `sourceVideoAnalysis.sourceReferenceLabel`, when supplied, must match a user reference labeled with role `source_video_structure`.
+- Source-video keyframe URIs must be credential-free HTTPS or `asset://` references before LLM planning or provider spend.
+- Story Architect receives a compact, bounded source-video brief and is instructed to use it only for original pacing, structure, camera grammar, and style transformation.
+- Successful runs emit `source-video-analysis.json` when this contract is present; `run-summary.json` and `review-packet.json` include source-video scene and transcript counts.
+
+## Continuity Strategy
+
+Continuity is represented in ledgers:
+
+- `IdentityLedger`: face, hair, wardrobe, body shape, age, accessories.
+- `ProductLedger`: geometry, material, color, label, logo permissions, packaging.
+- `EnvironmentLedger`: location, props, weather, time of day, lighting direction.
+- `CameraLedger`: lens feel, movement grammar, shot scale, camera support.
+- `AudioLedger`: voice, music, beat, ambience, SFX, language.
+- `NarrativeLedger`: facts already stated, promises, story state.
+
+Each shot reads the relevant ledgers and writes updates only when approved by the graph.
+
+Runtime implementation:
+
+- `LongFormContinuityPlanner` builds `long-form-continuity.json` after shot planning and reference selection.
+- The artifact records per-sequence identity, product, environment, style, source-video scene IDs, risk codes, opening/closing beat summaries, bridge-to-next intent, and `parallel_safe` versus `sequential_recommended` render guidance.
+- Source-video references are reduced to source scene IDs and labels; raw provider/reference URLs are not serialized into continuity evidence.
+- `ProjectArtifactValidator` now requires and validates this artifact on successful runs, and `tests/run-long-form-continuity-smoke.mjs` proves the no-spend continuity contract for a 120-second fixture.
+
+`LongFormAgentReviewPlanner` then builds `long-form-agent-review.json` before prompt compilation. It is a deterministic no-spend review board translated from ViMax/VideoAgent/VibeFrame patterns, with five roles: script architect, continuity supervisor, source-video reviewer, render orchestrator, and commercial-risk reviewer. Blocking findings stop prompt compilation before provider spend; warning findings become manual-review directives in run artifacts and review packets. `tests/run-long-form-agent-review-smoke.mjs` proves the review-required and blocked branches without network or provider calls.
+
+`LongFormTimelinePlanner` builds `long-form-timeline.json` after render scheduling and postproduction planning. It converts continuity sequences, scheduled shots, caption cues, supplied audio roles, and generated-audio intents into a deterministic timeline with per-segment start/end seconds, sequence boundaries, render batch IDs, sequential reasons, source-video scene IDs, caption coverage, audio coverage, manual-review segment counts, issue counts, and no-spend release gates. Missing schedule evidence blocks before provider spend; continuity-sensitive segments remain review-required evidence instead of release approval. `tests/run-long-form-timeline-smoke.mjs` proves the ready and missing-schedule blocked branches without network or provider calls.
+
+Assembly uses the rendered provider evidence after timeline planning, but only video media outputs are eligible as timeline clips. Provider sidecars such as Atlas `returnLastFrame` images remain evidence/reference material and must not increase `clipCount`, transition count, or final timeline duration drift. `DeliveryGate` also checks the inspected final duration against `durationTargetSeconds`: drift above 5% becomes a review warning, and drift above 15% blocks customer handoff. `tests/run-mixed-output-assembly-smoke.mjs` proves these media-selection and duration-gate contracts without network or provider spend.
+
+For the approved low-cost 45-60 second real long-backend closure scope, `scripts/audit-long-backend-45s-closure.mjs` gathers the paid Atlas render report, video-only reassembly media probe, mixed-output assembly smoke, long-form continuity smoke, agent-review smoke, timeline smoke, and render-scheduler smoke into one pass/fail report. This closure report is allowed to unblock short-pipeline hardening, but it deliberately does not claim 120-480 second commercial long-form validation or DirectorBench parity.
+
+## Reference Reuse Policy
+
+Source basis:
+
+- ViMax selects reference images required for the current first frame using previous timeline context.
+- Atlas Cloud supports reference assets, first/last-frame style workflows, clean direct references, media upload, and reviewed `asset://` references.
+- Emily2040 separates assets by role.
+
+Rules:
+
+- Identity-critical characters always carry identity references unless the shot is distant or abstract.
+- Product-critical shots always carry product references or post-composited product plates.
+- Scenes reuse environment anchors until the graph explicitly changes location.
+- Camera/motion references are reused only when they support the beat.
+- Last frames from approved clips may become next-shot first-frame anchors when transition continuity matters.
+
+## Transition Strategy
+
+DirectorBench reports between-unit transition quality as a major bottleneck. CineJelly treats transitions as first-class graph nodes.
+
+Transition data:
+
+- outgoing shot end state
+- incoming shot start state
+- visual bridge
+- audio bridge
+- motion direction
+- color continuity
+- semantic relation
+- required handles
+
+Transition repair:
+
+- generate bridge clip
+- re-render outgoing last seconds
+- re-render incoming first seconds
+- use first/last frame anchors
+- apply deterministic edit transition
+- alter audio bridge
+
+## Parallelization Strategy
+
+Parallel rendering is allowed when:
+
+- shots do not depend on each other's returned frames
+- identity/environment references are stable
+- scene state is already approved
+- no unresolved upstream continuity constraint exists
+
+Parallel rendering is blocked when:
+
+- next shot needs previous last frame
+- scene identity is not approved
+- reference asset registration is pending
+- test take has not passed for a high-risk character/product
+
+This follows ViMax's high-efficiency parallel shot generation idea while preserving graph correctness.
+
+Runtime implementation:
+
+- `CINEJELLY_RENDER_CONCURRENCY` controls the maximum concurrent renderable shot workers; the default is conservative.
+- The render scheduler parallelizes only shots without first/last-frame references, endpoint continuity fields, transition risk, or transition wording that implies previous/next/anchor continuity.
+- Sequential shots flush pending parallel batches first, preserving graph correctness and final assembly order.
+
+Runtime candidate evidence:
+
+- Validated user references are preserved as `reference_asset` graph nodes before clip rendering begins.
+- High-risk shots can produce a 4-second test-take `ClipRender` node before full candidate rendering.
+- Quality mode controls how many candidates are rendered per shot.
+- Quality mode also controls the maximum targeted repair attempts per shot before delivery.
+- Each test take and candidate becomes a `ClipRender` node with candidate index, optional test-take flag, optional repair attempt index, provider status, output URLs, cost metadata when available, and selected/rejected state.
+- Batch output generation follows MoneyPrinterTurbo's useful candidate-output idea but records every candidate, selected render, rejected render, material candidate, and final deliverable as graph evidence.
+- Render inspection reports are attached to each candidate clip node.
+- Repair prompts are generated from Guardian findings and original compiler repair hints, then rerender only the affected shot.
+- Repair actions are created only from the selected candidate after the repair budget is exhausted, so rejected alternatives remain audit evidence without forcing unnecessary repair loops.
+
+## Cost and Approval Gates
+
+Source basis:
+
+- VibeFrame uses cost gates, dry runs, and build reports.
+- OpenMontage returns cost estimates and approval checkpoints before full production.
+
+CineJelly gates:
+
+- `Graph Plan Gate`: story/scene/shot count and cost estimate.
+- `Reference Gate`: asset validation and rights check.
+- `Test Take Gate`: high-risk identity/motion approval.
+- `Render Gate`: batch render authorization.
+- `Repair Gate`: approve expensive rerender if cost exceeds threshold.
+- `Delivery Gate`: final QC before export.
+
+For fully automated workflows, gates can be policy-driven rather than manual.
+
+## Long-Form Quality Metrics
+
+DirectorBench-inspired dimensions:
+
+- Script: narrative coherence, beat order, user intent fulfillment.
+- Visual: composition, identity, product accuracy, camera, lighting, style.
+- Audio: dialogue, voice, music, ambience, loudness, sync.
+- Cross-modal: lip-sync, beat matching, scene/audio relationship.
+- Stability: temporal consistency, flicker, transition quality, long-term continuity.
+
+Additional commercial metrics:
+
+- brand compliance
+- platform fit
+- call-to-action clarity
+- product legibility
+- rights risk
+- cost per usable second
+- repair count per minute
+
+## Failure Recovery
+
+Failure scopes:
+
+- `ShotLocal`: repair prompt or rerender one shot.
+- `SceneLocal`: update scene references or environment ledger.
+- `SequenceLocal`: replan pacing or transitions.
+- `Global`: rebuild identity anchors, story arc, or provider strategy.
+
+Default policy:
+
+- Prefer smallest repair scope.
+- Preserve approved clips.
+- Reuse approved frames as anchors.
+- Escalate to human only for rights, brand, or unresolved identity failures.

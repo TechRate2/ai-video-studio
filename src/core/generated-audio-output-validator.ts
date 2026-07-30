@@ -1,0 +1,397 @@
+/**
+ * Validates provider-generated audio results before they can become mix tracks.
+ * Inspired by audio-stage artifacts and validation-before-release discipline.
+ */
+
+import type { AudioMixTrack, AudioTrackRole, GeneratedAudioIntent, GeneratedAudioIntentKind } from "../types/audio.js";
+import { MAX_NATURAL_TEMPO } from "./dub-duration-fit.js";
+import type { GeneratedAudioExecutionReadyItem } from "../types/generated-audio-execution.js";
+import type { GeneratedAudioAssetResolutionReport } from "../types/generated-audio-asset.js";
+import type {
+  GeneratedAudioOutputValidationIssue,
+  GeneratedAudioOutputValidationIssueCode,
+  GeneratedAudioOutputValidationReport,
+  GeneratedAudioOutputValidationSeverity,
+  GeneratedAudioOutputValidationStatus
+} from "../types/generated-audio-output.js";
+import type { AudioGenerationResult } from "../types/provider.js";
+import { createStableId } from "../utils/ids.js";
+import type { GeneratedAudioAssetResolverLike } from "./generated-audio-asset-resolver.js";
+
+const SECRET_QUERY_KEY_PATTERN =
+  /(?:api[_-]?key|access[_-]?key|token|secret|signature|sig|password|credential|authorization|auth|policy|expires|key-pair-id|x-amz-|x-goog-|x-oss-|x-ms-)/i;
+const DEFAULT_VOLUME = 1;
+const MAX_VOLUME = 2;
+const DURATION_TOLERANCE_SECONDS = 1;
+
+export interface GeneratedAudioOutputValidatorInput {
+  readonly intent: GeneratedAudioIntent;
+  readonly plannedItem: GeneratedAudioExecutionReadyItem;
+  readonly result: AudioGenerationResult;
+}
+
+export interface GeneratedAudioOutputValidatorOptions {
+  readonly assetResolver?: GeneratedAudioAssetResolverLike;
+}
+
+interface OutputUrlDecision {
+  readonly approvedForTrack: boolean;
+  readonly trackUrl?: string;
+  readonly assetResolution?: GeneratedAudioAssetResolutionReport;
+}
+
+export class GeneratedAudioOutputValidator {
+  private readonly assetResolver: GeneratedAudioAssetResolverLike | undefined;
+
+  public constructor(options: GeneratedAudioOutputValidatorOptions = {}) {
+    this.assetResolver = options.assetResolver;
+  }
+
+  public validate(input: GeneratedAudioOutputValidatorInput): GeneratedAudioOutputValidationReport {
+    const issues: GeneratedAudioOutputValidationIssue[] = [];
+    this.validateIdentity(input, issues);
+    const fitTempo = this.validateDuration(input, issues);
+    const outputUrl = input.result.outputUrl;
+    const outputDecision = this.validateOutputUrl(outputUrl, input, issues);
+    const volume = this.volume(input.intent.volume, issues);
+    const status = this.status(issues);
+    const audioTrack = status === "approved" && outputDecision.trackUrl && outputDecision.approvedForTrack
+      ? this.audioTrack(input.intent, outputDecision.trackUrl, volume, fitTempo)
+      : undefined;
+
+    return {
+      status,
+      intentId: input.intent.intentId,
+      kind: input.intent.kind,
+      provider: input.result.provider,
+      modelId: input.result.modelId,
+      ...(outputUrl ? { outputUrl } : {}),
+      ...(outputDecision.trackUrl && outputDecision.trackUrl !== outputUrl ? { resolvedOutputUrl: outputDecision.trackUrl } : {}),
+      ...(input.result.providerAssetId ? { providerAssetId: input.result.providerAssetId } : {}),
+      ...(input.result.durationSeconds !== undefined ? { durationSeconds: input.result.durationSeconds } : {}),
+      ...(outputDecision.assetResolution ? { assetResolution: outputDecision.assetResolution } : {}),
+      issueCount: issues.length,
+      issues,
+      ...(fitTempo !== undefined && input.plannedItem.request.settings.durationSeconds !== undefined
+        ? {
+            tempoFit: {
+              ratio: fitTempo,
+              measuredSeconds: input.result.durationSeconds as number,
+              plannedSeconds: input.plannedItem.request.settings.durationSeconds
+            }
+          }
+        : {}),
+      ...(audioTrack ? { audioTrack } : {})
+    };
+  }
+
+  private validateIdentity(
+    input: GeneratedAudioOutputValidatorInput,
+    issues: GeneratedAudioOutputValidationIssue[]
+  ): void {
+    if (input.result.status !== "succeeded") {
+      issues.push(this.issue(
+        "provider_result_not_succeeded",
+        "block",
+        "Generated-audio provider result is not succeeded.",
+        "Retry or repair the generated-audio request before adding it to the audio mix."
+      ));
+    }
+    if (input.result.intentId !== input.intent.intentId || input.result.intentId !== input.plannedItem.intentId) {
+      issues.push(this.issue(
+        "intent_mismatch",
+        "block",
+        "Generated-audio result intent ID does not match the planned intent.",
+        "Discard the result and rerun the matching generated-audio intent."
+      ));
+    }
+    if (input.result.kind !== input.intent.kind || input.result.kind !== input.plannedItem.kind) {
+      issues.push(this.issue(
+        "kind_mismatch",
+        "block",
+        "Generated-audio result kind does not match the planned intent kind.",
+        "Discard the result and rerun with the correct generated-audio kind."
+      ));
+    }
+    if (input.result.provider !== input.plannedItem.provider) {
+      issues.push(this.issue(
+        "provider_mismatch",
+        "block",
+        "Generated-audio result provider does not match the planned provider.",
+        "Use the result from the planned provider or regenerate the audio with a reviewed plan."
+      ));
+    }
+    if (input.result.modelId !== input.plannedItem.modelId) {
+      issues.push(this.issue(
+        "model_mismatch",
+        "block",
+        "Generated-audio result model ID does not match the planned model.",
+        "Use the result from the planned model or regenerate the audio with a reviewed plan."
+      ));
+    }
+  }
+
+  /** Returns an atempo ratio when the overrun is fittable (MPT-invariant completion); undefined = unchanged. */
+  private validateDuration(
+    input: GeneratedAudioOutputValidatorInput,
+    issues: GeneratedAudioOutputValidationIssue[]
+  ): number | undefined {
+    const duration = input.result.durationSeconds;
+    if (duration === undefined) {
+      issues.push(this.issue(
+        "missing_duration",
+        "block",
+        "Generated-audio result is missing duration evidence.",
+        "Inspect the generated audio and record a positive duration before mixing."
+      ));
+      return undefined;
+    }
+    if (!Number.isFinite(duration) || duration <= 0) {
+      issues.push(this.issue(
+        "invalid_duration",
+        "block",
+        "Generated-audio result duration must be greater than zero seconds.",
+        "Discard the result or inspect the generated audio before mixing."
+      ));
+      return undefined;
+    }
+    const plannedDuration = input.plannedItem.request.settings.durationSeconds;
+    if (plannedDuration !== undefined && plannedDuration > 0 && duration > plannedDuration + DURATION_TOLERANCE_SECONDS) {
+      // Fittable overrun (repo-fidelity: MoneyPrinterTurbo ACCOMMODATES long narration; we used to
+      // hard-reject it). Within the natural speech cap the track is tempo-fitted at mix time (the
+      // engine's atempo, same mechanism as dubbing duration-fit) and passes with a WARN. Only an
+      // overrun beyond the cap — audibly chipmunked speech — still blocks.
+      const neededTempo = duration / plannedDuration;
+      if (neededTempo <= MAX_NATURAL_TEMPO) {
+        // NOT an issue: the fit IS the accommodation (a warn would flip the whole result to
+        // review_required and suppress the track — defeating the point). Transparency lives in the
+        // report's tempoFit field instead.
+        return Math.round(neededTempo * 1000) / 1000;
+      }
+      issues.push(this.issue(
+        "duration_exceeds_plan",
+        "block",
+        `Generated-audio result duration exceeds the planned duration beyond the natural tempo-fit cap (${MAX_NATURAL_TEMPO}x).`,
+        "Regenerate shorter audio or revise the generated-audio execution plan before mixing."
+      ));
+    }
+    return undefined;
+  }
+
+  private validateOutputUrl(
+    outputUrl: string | undefined,
+    input: GeneratedAudioOutputValidatorInput,
+    issues: GeneratedAudioOutputValidationIssue[]
+  ): OutputUrlDecision {
+    if (!outputUrl) {
+      issues.push(this.issue(
+        "missing_output_url",
+        "block",
+        "Generated-audio result is missing an output URL.",
+        "Do not mix the result until the provider returns a safe output URL."
+      ));
+      return { approvedForTrack: false };
+    }
+    if (/^data:/i.test(outputUrl)) {
+      issues.push(this.issue(
+        "unsafe_output_url",
+        "block",
+        "Generated-audio output URL must not be an inline data URI.",
+        "Use a credential-free HTTPS audio URL or resolve the asset through a reviewed internal asset resolver."
+      ));
+      return { approvedForTrack: false };
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(outputUrl);
+    } catch {
+      issues.push(this.issue(
+        "invalid_output_url",
+        "block",
+        "Generated-audio output URL is not a valid URL.",
+        "Use a valid credential-free HTTPS audio URL."
+      ));
+      return { approvedForTrack: false };
+    }
+
+    if (parsed.username || parsed.password) {
+      issues.push(this.issue(
+        "unsafe_output_url",
+        "block",
+        "Generated-audio output URL must not include embedded credentials.",
+        "Regenerate or proxy the audio through a credential-free delivery URL."
+      ));
+      return { approvedForTrack: false };
+    }
+    if (parsed.protocol === "asset:") {
+      if (parsed.search || parsed.hash) {
+        issues.push(this.issue(
+          "unsafe_output_url",
+          "block",
+          "Generated-audio asset URI must not include query strings or fragments.",
+          "Use a clean asset:// URI and resolve it through an approved asset resolver."
+        ));
+        return { approvedForTrack: false };
+      }
+      if (!this.assetResolver) {
+        issues.push(this.issue(
+          "asset_resolution_required",
+          "warn",
+          "Generated-audio asset URI requires an audio asset resolver before mixing.",
+          "Resolve the asset to a credential-free HTTPS URL through a reviewed audio asset resolver."
+        ));
+        return { approvedForTrack: false };
+      }
+
+      const assetResolution = this.assetResolver.resolve({
+        assetUri: parsed.toString(),
+        intent: input.intent,
+        plannedItem: input.plannedItem,
+        result: input.result
+      });
+      if (assetResolution.status === "rejected") {
+        issues.push(this.issue(
+          "asset_resolution_failed",
+          "block",
+          "Generated-audio asset resolver rejected the output asset.",
+          "Review the assetResolution issues before mixing this generated-audio output."
+        ));
+        return { approvedForTrack: false, assetResolution };
+      }
+      if (assetResolution.status === "review_required" || !assetResolution.resolvedUrl) {
+        issues.push(this.issue(
+          "asset_resolution_required",
+          "warn",
+          "Generated-audio asset URI requires reviewed resolution before mixing.",
+          "Approve and resolve the generated-audio asset to a credential-free HTTPS URL."
+        ));
+        return { approvedForTrack: false, assetResolution };
+      }
+      return {
+        approvedForTrack: this.validateCredentialFreeHttps(assetResolution.resolvedUrl, issues),
+        trackUrl: assetResolution.resolvedUrl,
+        assetResolution
+      };
+    }
+    return {
+      approvedForTrack: this.validateParsedHttpsUrl(parsed, issues),
+      trackUrl: outputUrl
+    };
+  }
+
+  private validateCredentialFreeHttps(
+    outputUrl: string,
+    issues: GeneratedAudioOutputValidationIssue[]
+  ): boolean {
+    let parsed: URL;
+    try {
+      parsed = new URL(outputUrl);
+    } catch {
+      issues.push(this.issue(
+        "invalid_output_url",
+        "block",
+        "Generated-audio resolved output URL is not a valid URL.",
+        "Use a valid credential-free HTTPS audio URL."
+      ));
+      return false;
+    }
+    return this.validateParsedHttpsUrl(parsed, issues);
+  }
+
+  private validateParsedHttpsUrl(parsed: URL, issues: GeneratedAudioOutputValidationIssue[]): boolean {
+    if (parsed.protocol !== "https:") {
+      issues.push(this.issue(
+        "unsafe_output_url",
+        "block",
+        "Generated-audio output URL must use HTTPS.",
+        "Use a credential-free HTTPS audio URL."
+      ));
+      return false;
+    }
+    if (parsed.username || parsed.password) {
+      issues.push(this.issue(
+        "unsafe_output_url",
+        "block",
+        "Generated-audio output URL must not include embedded credentials.",
+        "Regenerate or proxy the audio through a credential-free delivery URL."
+      ));
+      return false;
+    }
+    for (const key of parsed.searchParams.keys()) {
+      if (SECRET_QUERY_KEY_PATTERN.test(key)) {
+        issues.push(this.issue(
+          "unsafe_output_url",
+          "block",
+          `Generated-audio output URL contains credential-like query parameter ${key}.`,
+          "Use a credential-free delivery URL before adding generated audio to the mix."
+        ));
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private volume(value: number | undefined, issues: GeneratedAudioOutputValidationIssue[]): number {
+    const volume = value ?? DEFAULT_VOLUME;
+    if (!Number.isFinite(volume) || volume < 0 || volume > MAX_VOLUME) {
+      issues.push(this.issue(
+        "invalid_volume",
+        "block",
+        "Generated-audio volume must be a finite number between 0 and 2.",
+        "Adjust the generated-audio intent volume before mixing."
+      ));
+      return DEFAULT_VOLUME;
+    }
+    return volume;
+  }
+
+  private audioTrack(intent: GeneratedAudioIntent, outputUrl: string, volume: number, tempo?: number): AudioMixTrack {
+    return {
+      trackId: createStableId("generated_audio_track", intent.intentId),
+      sourceUrlOrPath: outputUrl,
+      role: this.roleForKind(intent.kind),
+      volume,
+      // Carry the cue's planned start so the mix places it at that moment (adelay), instead of every
+      // narration segment / SFX / ambience cue stacking at 0:00 and overlapping (final-audit gap V7).
+      ...(Number.isFinite(intent.startSecond) && (intent.startSecond as number) > 0
+        ? { startSeconds: intent.startSecond as number }
+        : {}),
+      // Tempo-fit for fittable overruns (duration_tempo_fitted): the mix engine's atempo compresses
+      // the content into its planned window instead of the old hard rejection.
+      ...(tempo !== undefined && tempo > 1 ? { tempo } : {})
+    };
+  }
+
+  private roleForKind(kind: GeneratedAudioIntentKind): AudioTrackRole {
+    switch (kind) {
+      case "tts_narration":
+        return "narration";
+      case "bgm":
+        return "music";
+      case "ambience":
+        return "ambience";
+      case "sfx":
+        return "sfx";
+    }
+  }
+
+  private status(issues: readonly GeneratedAudioOutputValidationIssue[]): GeneratedAudioOutputValidationStatus {
+    if (issues.some((issue) => issue.severity === "block")) {
+      return "rejected";
+    }
+    if (issues.some((issue) => issue.severity === "warn")) {
+      return "review_required";
+    }
+    return "approved";
+  }
+
+  private issue(
+    code: GeneratedAudioOutputValidationIssueCode,
+    severity: GeneratedAudioOutputValidationSeverity,
+    message: string,
+    repair: string
+  ): GeneratedAudioOutputValidationIssue {
+    return { code, severity, message, repair };
+  }
+}

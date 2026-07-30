@@ -1,0 +1,374 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cinejelly.local/schemas/short-viral-intelligence-smoke-report.schema.json",
+  "title": "CineJelly Short Viral Intelligence Smoke Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "status",
+    "noSpend",
+    "networkCallsMade",
+    "providerCallsMade",
+    "sourcePatternOrigins",
+    "checkedInputs",
+    "scenarios",
+    "checks",
+    "releaseGateSummary",
+    "nextActions"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "cinejelly.short-viral-intelligence-smoke.v1" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "status": { "enum": ["pass", "fail"] },
+    "noSpend": { "const": true },
+    "networkCallsMade": { "const": false },
+    "providerCallsMade": { "const": false },
+    "sourcePatternOrigins": {
+      "type": "array",
+      "minItems": 5,
+      "items": { "type": "string" }
+    },
+    "checkedInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outputPath", "scenarioCount", "referenceRawLeakCheckPassed", "endpointsCovered"],
+      "properties": {
+        "outputPath": { "type": "string" },
+        "scenarioCount": { "const": 16 },
+        "referenceRawLeakCheckPassed": { "type": "boolean" },
+        "endpointsCovered": {
+          "type": "array",
+          "description": "Short-pipeline endpoints this smoke exercises. Was 4 until POST /v1/short-pipeline/product-url-plan was retired by owner decision on 2026-07-23 (live product-URL scraping is fragile and routinely anti-botted); the route now answers 410 and the smoke covers the three that remain.",
+          "minItems": 3,
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "scenarios": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["viralPlan", "copyRisk", "vietnameseCopyRisk", "unsafeReference", "genericNiche", "beverageNiche", "miniTextOnly", "qualityOverride", "videoRemake", "trendUploadOnly", "newsExplainer", "podcastClip", "fashionTryOn", "mobileAppDemo", "conversation", "renderHandoff"],
+      "properties": {
+        "viralPlan": { "$ref": "#/$defs/planScenario" },
+        "copyRisk": { "$ref": "#/$defs/planScenario" },
+        "vietnameseCopyRisk": { "$ref": "#/$defs/planScenario" },
+        "unsafeReference": { "$ref": "#/$defs/planScenario" },
+        "genericNiche": { "$ref": "#/$defs/planScenario" },
+        "beverageNiche": { "$ref": "#/$defs/planScenario" },
+        "miniTextOnly": { "$ref": "#/$defs/planScenario" },
+        "qualityOverride": { "$ref": "#/$defs/planScenario" },
+        "videoRemake": { "$ref": "#/$defs/planScenario" },
+        "trendUploadOnly": { "$ref": "#/$defs/planScenario" },
+        "newsExplainer": { "$ref": "#/$defs/planScenario" },
+        "podcastClip": { "$ref": "#/$defs/planScenario" },
+        "fashionTryOn": { "$ref": "#/$defs/planScenario" },
+        "mobileAppDemo": { "$ref": "#/$defs/planScenario" },
+        "conversation": { "$ref": "#/$defs/conversationScenario" },
+        "renderHandoff": { "$ref": "#/$defs/renderHandoffScenario" }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "message"],
+        "properties": {
+          "name": { "type": "string" },
+          "status": { "enum": ["pass", "fail"] },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "releaseGateSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shortViralIntelligenceSmokePass",
+        "canUseAsNoSpendBackendEvidence",
+        "canReleaseToCustomerTraffic",
+        "releaseBlocker"
+      ],
+      "properties": {
+        "shortViralIntelligenceSmokePass": { "type": "boolean" },
+        "canUseAsNoSpendBackendEvidence": { "type": "boolean" },
+        "canReleaseToCustomerTraffic": { "const": false },
+        "releaseBlocker": { "type": "string" }
+      }
+    },
+    "nextActions": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "planScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planId",
+        "status",
+        "viralStatus",
+        "platformFocus",
+        "creativeMode",
+        "niche",
+        "buyerIntent",
+        "presentationStyle",
+        "trendPosture",
+        "ideaSeedCount",
+        "creativePatternCount",
+        "ideaCandidateCount",
+        "platformTemplatePatternCount",
+        "winningIdeaIdPresent",
+        "selectedIdeaScore",
+        "viralLeverCount",
+        "conceptScoreCount",
+        "winningConceptIdPresent",
+        "sceneDirectiveCount",
+        "findingCodes",
+        "referencePatternIdPresent",
+        "referenceSafetyStatus",
+        "referenceSourceUrlSha256Present",
+        "referenceRemakeBlueprintPresent",
+        "referenceRemakeStatus",
+        "referenceRemakeTrendVideoIntakeMode",
+        "referenceRemakeReplacementSlotCount",
+        "referenceRemakeAdherenceTargetCount",
+        "referenceRemakeSourceBeatMapCount",
+        "referenceRemakeLockedElementCount",
+        "referenceRemakeGuardrailCount",
+        "visualBibleStatus",
+        "visualBibleMode",
+        "visualBibleRecommendedPipe",
+        "visualBibleDurationBand",
+        "visualBibleAssetPlanCount",
+        "visualBibleBoardCount",
+        "visualBibleTargetClipCount",
+        "visualBibleBlocksRender",
+        "videoPipePlanIdPresent",
+        "videoPipeSelectedMode",
+        "videoPipeSelectedBackendPipe",
+        "videoPipeSelectionReasonCodeCount",
+        "videoPipeVisualBibleAlignmentStatus",
+        "videoPipeOptionCount",
+        "mediaReferenceCount",
+        "mediaProviderHandoffCount",
+        "seedanceRecommendedProviderMode",
+        "seedancePreferredTier",
+        "seedanceResolution",
+        "seedanceReturnLastFrame",
+        "seedanceReferenceTagCount",
+        "seedancePromptRecipeName",
+        "rawReferenceSerialized",
+        "canUseAsNoSpendViralEvidence",
+        "canReleaseToCustomerTraffic"
+      ],
+      "properties": {
+        "planId": { "type": "string" },
+        "status": { "enum": ["approval_required", "changes_requested", "blocked"] },
+        "viralStatus": { "enum": ["ready", "review_required", "blocked"] },
+        "platformFocus": { "type": "string" },
+        "creativeMode": { "type": "string" },
+        "niche": { "type": "string" },
+        "buyerIntent": { "type": "string" },
+        "presentationStyle": { "type": "string" },
+        "trendPosture": { "type": "string" },
+        "ideaSeedCount": { "type": "integer", "minimum": 0 },
+        "creativePatternCount": { "type": "integer", "minimum": 0 },
+        "ideaCandidateCount": { "type": "integer", "minimum": 0 },
+        "platformTemplatePatternCount": { "type": "integer", "minimum": 0 },
+        "winningIdeaIdPresent": { "type": "boolean" },
+        "selectedIdeaScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "viralLeverCount": { "type": "integer", "minimum": 0 },
+        "conceptScoreCount": { "type": "integer", "minimum": 0 },
+        "winningConceptIdPresent": { "type": "boolean" },
+        "sceneDirectiveCount": { "type": "integer", "minimum": 0 },
+        "findingCodes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "referencePatternIdPresent": { "type": "boolean" },
+        "referenceSafetyStatus": { "type": "string" },
+        "referenceSourceUrlSha256Present": { "type": "boolean" },
+        "referenceRemakeBlueprintPresent": { "type": "boolean" },
+        "referenceRemakeStatus": { "type": "string" },
+        "referenceRemakeTrendVideoIntakeMode": { "type": "string" },
+        "referenceRemakeReplacementSlotCount": { "type": "integer", "minimum": 0 },
+        "referenceRemakeAdherenceTargetCount": { "type": "integer", "minimum": 0 },
+        "referenceRemakeSourceBeatMapCount": { "type": "integer", "minimum": 0 },
+        "referenceRemakeLockedElementCount": { "type": "integer", "minimum": 0 },
+        "referenceRemakeGuardrailCount": { "type": "integer", "minimum": 0 },
+        "visualBibleStatus": { "enum": ["not_needed", "recommended", "required"] },
+        "visualBibleMode": { "enum": ["auto", "off", "reference_board", "storyboard_board", "production_bible"] },
+        "visualBibleRecommendedPipe": {
+          "enum": [
+            "normal_short_pipe",
+            "product_kol_reference_pipe",
+            "reference_board_pipe",
+            "storyboard_board_pipe",
+            "video_remake_pipe",
+            "long_sequence_bible_pipe"
+          ]
+        },
+        "visualBibleDurationBand": { "enum": ["single_clip_5_15", "short_multishot_15_60", "midform_sequence_60_180", "long_sequence_180_480"] },
+        "visualBibleAssetPlanCount": { "type": "integer", "minimum": 0 },
+        "visualBibleBoardCount": { "type": "integer", "minimum": 1 },
+        "visualBibleTargetClipCount": { "type": "integer", "minimum": 1 },
+        "visualBibleBlocksRender": { "type": "boolean" },
+        "videoPipePlanIdPresent": { "const": true },
+        "videoPipeSelectedMode": {
+          "enum": [
+            "smart_short",
+            "product_kol_ugc",
+            "storyboard_multishot",
+            "video_remake",
+            "production_bible"
+          ]
+        },
+        "videoPipeSelectedBackendPipe": {
+          "enum": [
+            "normal_short_pipe",
+            "product_kol_reference_pipe",
+            "storyboard_board_pipe",
+            "video_remake_pipe",
+            "long_sequence_bible_pipe"
+          ]
+        },
+        "videoPipeSelectionReasonCodeCount": { "type": "integer", "minimum": 1 },
+        "videoPipeVisualBibleAlignmentStatus": {
+          "enum": [
+            "aligned",
+            "reference_board_asset_workflow",
+            "storyboard_until_references",
+            "duration_override",
+            "canonical_backend_override"
+          ]
+        },
+        "videoPipeOptionCount": { "const": 5 },
+        "mediaReferenceCount": { "type": "integer", "minimum": 0 },
+        "mediaProviderHandoffCount": { "type": "integer", "minimum": 0 },
+        "seedanceRecommendedProviderMode": { "enum": ["text_to_video", "image_to_video", "reference_to_video"] },
+        "seedancePreferredTier": { "enum": ["mini", "fast", "standard"] },
+        "seedanceResolution": { "$ref": "#/$defs/seedanceResolution" },
+        "seedanceReturnLastFrame": { "type": "boolean" },
+        "seedanceReferenceTagCount": { "type": "integer", "minimum": 0 },
+        "seedancePromptRecipeName": {
+          "enum": [
+            "text_to_video_niche_short",
+            "image_to_video_product_or_kol",
+            "reference_to_video_multi_reference",
+            "reference_to_video_remake_blueprint",
+            "reference_board_to_video_sequence"
+          ]
+        },
+        "rawReferenceSerialized": { "const": false },
+        "canUseAsNoSpendViralEvidence": { "type": "boolean" },
+        "canReleaseToCustomerTraffic": { "const": false }
+      }
+    },
+    "conversationScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "rawTranscriptStored",
+        "planStatus",
+        "viralStatus",
+        "referencePatternIdPresent",
+        "sceneDirectiveCount",
+        "canUseAsNoSpendConversationEvidence"
+      ],
+      "properties": {
+        "sessionId": { "type": "string" },
+        "rawTranscriptStored": { "const": false },
+        "planStatus": { "enum": ["approval_required", "changes_requested", "blocked"] },
+        "viralStatus": { "enum": ["ready", "review_required", "blocked"] },
+        "referencePatternIdPresent": { "type": "boolean" },
+        "sceneDirectiveCount": { "type": "integer", "minimum": 0 },
+        "canUseAsNoSpendConversationEvidence": { "type": "boolean" }
+      }
+    },
+    "renderHandoffScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planId",
+        "metadataHasViralLineage",
+        "metadataHasCreativePatternLineage",
+        "metadataHasSeedanceRouting",
+        "seedanceProviderMode",
+        "seedancePreferredTier",
+        "seedanceResolution",
+        "requestReferenceCount",
+        "requestSettingsTier",
+        "requestSettingsResolution",
+        "requestSettingsReturnLastFrame",
+        "promptHasViralStrategy",
+        "promptHasCreativePatternLearning",
+        "promptHasSeedanceRouting",
+        "metadataHasVideoPipePlan",
+        "videoPipeSelectedMode",
+        "promptHasVideoPipePlan",
+        "promptHasMediaReferenceBinding",
+        "promptHasSelectedIdea",
+        "promptHasSceneDirectives",
+        "promptHasReferenceGuardrail",
+        "remakeMetadataHasSourceVideoMode",
+        "remakeMetadataHasVideoRemakeMode",
+        "promptHasVideoRemakeBlueprint",
+        "promptHasVideoRemakeBeatMap",
+        "trendUploadRequestReferenceCount",
+        "trendUploadHasSourceVideoReference",
+        "captionCueCount",
+        "generatedAudioIntentCount",
+        "canReleaseToCustomerTraffic"
+      ],
+      "properties": {
+        "planId": { "type": "string" },
+        "metadataHasViralLineage": { "type": "boolean" },
+        "metadataHasCreativePatternLineage": { "type": "boolean" },
+        "metadataHasSeedanceRouting": { "type": "boolean" },
+        "seedanceProviderMode": { "enum": ["text_to_video", "image_to_video", "reference_to_video"] },
+        "seedancePreferredTier": { "enum": ["mini", "fast", "standard"] },
+        "seedanceResolution": { "$ref": "#/$defs/seedanceResolution" },
+        "requestReferenceCount": { "type": "integer", "minimum": 0 },
+        "requestSettingsTier": { "enum": ["mini", "fast", "standard"] },
+        "requestSettingsResolution": { "$ref": "#/$defs/seedanceResolution" },
+        "requestSettingsReturnLastFrame": { "type": "boolean" },
+        "promptHasViralStrategy": { "type": "boolean" },
+        "promptHasCreativePatternLearning": { "type": "boolean" },
+        "promptHasSeedanceRouting": { "type": "boolean" },
+        "metadataHasVideoPipePlan": { "type": "boolean" },
+        "videoPipeSelectedMode": {
+          "enum": [
+            "smart_short",
+            "product_kol_ugc",
+            "storyboard_multishot",
+            "video_remake",
+            "production_bible"
+          ]
+        },
+        "promptHasVideoPipePlan": { "type": "boolean" },
+        "promptHasMediaReferenceBinding": { "type": "boolean" },
+        "promptHasSelectedIdea": { "type": "boolean" },
+        "promptHasSceneDirectives": { "type": "boolean" },
+        "promptHasReferenceGuardrail": { "type": "boolean" },
+        "remakeMetadataHasSourceVideoMode": { "type": "boolean" },
+        "remakeMetadataHasVideoRemakeMode": { "type": "boolean" },
+        "promptHasVideoRemakeBlueprint": { "type": "boolean" },
+        "promptHasVideoRemakeBeatMap": { "type": "boolean" },
+        "trendUploadRequestReferenceCount": { "type": "integer", "minimum": 0 },
+        "trendUploadHasSourceVideoReference": { "type": "boolean" },
+        "captionCueCount": { "type": "integer", "minimum": 0 },
+        "generatedAudioIntentCount": { "type": "integer", "minimum": 1 },
+        "canReleaseToCustomerTraffic": { "const": false }
+      }
+    },
+    "seedanceResolution": {
+      "enum": ["480p", "720p", "1080p", "720p-SR", "1080p-SR", "1440p-SR"]
+    }
+  }
+}
